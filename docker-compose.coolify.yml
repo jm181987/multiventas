@@ -20,12 +20,21 @@ services:
     environment:
       MINIO_ROOT_USER: ${MINIO_ROOT_USER:?}
       MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?}
-      SERVICE_URL_MINIO_9000: /
     volumes:
       - minio_data:/data
     expose:
       - "9000"
       - "9001"
+    networks:
+      - default
+      - coolify
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=coolify"
+      - "traefik.http.routers.multiventas-media.rule=Host(`media.multiventas.169.58.110.123.sslip.io`)"
+      - "traefik.http.routers.multiventas-media.entrypoints=http"
+      - "traefik.http.routers.multiventas-media.service=multiventas-media"
+      - "traefik.http.services.multiventas-media.loadbalancer.server.port=9000"
 
   minio-init:
     build:
@@ -69,22 +78,31 @@ services:
       TOKEN_ENCRYPTION_KEY: ${TOKEN_ENCRYPTION_KEY:?}
       MP_CLIENT_ID: ${MP_CLIENT_ID:?}
       MP_CLIENT_SECRET: ${MP_CLIENT_SECRET:?}
-      MP_REDIRECT_URI: ${MP_REDIRECT_URI:?}
+      MP_REDIRECT_URI: http://api.multiventas.169.58.110.123.sslip.io/api/payments/mercadopago/callback
       MP_WEBHOOK_SECRET: ${MP_WEBHOOK_SECRET:?}
-      MP_WEBHOOK_URL: ${MP_WEBHOOK_URL:?}
+      MP_WEBHOOK_URL: http://api.multiventas.169.58.110.123.sslip.io/api/webhooks/mercadopago
       MP_MARKETPLACE_FEE_RATE: ${MP_MARKETPLACE_FEE_RATE:-0.08}
-      WEB_PUBLIC_URL: ${WEB_PUBLIC_URL:?}
-      API_PUBLIC_URL: ${API_PUBLIC_URL:?}
+      WEB_PUBLIC_URL: http://multiventas.169.58.110.123.sslip.io
+      API_PUBLIC_URL: http://api.multiventas.169.58.110.123.sslip.io
       S3_ENDPOINT: http://minio:9000
       S3_REGION: ${S3_REGION:-us-east-1}
       S3_BUCKET: ${S3_BUCKET:-multiventas}
       S3_ACCESS_KEY: ${MINIO_ROOT_USER:?}
       S3_SECRET_KEY: ${MINIO_ROOT_PASSWORD:?}
       S3_FORCE_PATH_STYLE: "true"
-      S3_PUBLIC_URL: ${S3_PUBLIC_URL:?}
-      SERVICE_URL_API_3001: /
+      S3_PUBLIC_URL: http://media.multiventas.169.58.110.123.sslip.io
     expose:
       - "3001"
+    networks:
+      - default
+      - coolify
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=coolify"
+      - "traefik.http.routers.multiventas-api.rule=Host(`api.multiventas.169.58.110.123.sslip.io`)"
+      - "traefik.http.routers.multiventas-api.entrypoints=http"
+      - "traefik.http.routers.multiventas-api.service=multiventas-api"
+      - "traefik.http.services.multiventas-api.loadbalancer.server.port=3001"
     depends_on:
       redis:
         condition: service_healthy
@@ -106,14 +124,23 @@ services:
       context: .
       dockerfile: apps/web/Dockerfile
       args:
-        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:?}
+        NEXT_PUBLIC_API_URL: http://api.multiventas.169.58.110.123.sslip.io/api
     restart: unless-stopped
     environment:
       NODE_ENV: production
-      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:?}
-      SERVICE_URL_WEB_3000: /
+      NEXT_PUBLIC_API_URL: http://api.multiventas.169.58.110.123.sslip.io/api
     expose:
       - "3000"
+    networks:
+      - default
+      - coolify
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=coolify"
+      - "traefik.http.routers.multiventas-web.rule=Host(`multiventas.169.58.110.123.sslip.io`)"
+      - "traefik.http.routers.multiventas-web.entrypoints=http"
+      - "traefik.http.routers.multiventas-web.service=multiventas-web"
+      - "traefik.http.services.multiventas-web.loadbalancer.server.port=3000"
     depends_on:
       api:
         condition: service_healthy
@@ -127,3 +154,7 @@ services:
 volumes:
   redis_data:
   minio_data:
+
+networks:
+  coolify:
+    external: true
