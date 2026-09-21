@@ -15,7 +15,7 @@ export default async function ProductPage({ params }: { params: { id: string } }
   return (
     <main className="mx-auto max-w-7xl px-4 py-10">
       <div className="grid gap-10 lg:grid-cols-2">
-        <div className="relative aspect-square overflow-hidden rounded-2xl bg-muted"><Image src={image} alt={product.title} fill className="object-cover" /></div>
+        <div className="relative aspect-square overflow-hidden rounded-2xl bg-muted"><Image src={image} alt={product.title} fill unoptimized={image.startsWith('/media/')} className="object-cover" /></div>
         <div className="space-y-6">
           <Badge>{product.store.name}</Badge>
           <div><h1 className="text-4xl font-black tracking-tight">{product.title}</h1><p className="mt-4 text-muted-foreground">{product.description}</p></div>
