@@ -98,3 +98,38 @@ jobs:
           echo "API did not become healthy within 30 seconds"
           cat /tmp/multiventas-api.log
           exit 1
+
+
+      - name: API Docker smoke test
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          docker build -f apps/api/Dockerfile -t multiventas-api-smoke .
+
+          docker run -d --name multiventas-api-smoke             --network host             -e NODE_ENV=production             -e API_PORT=3001             -e DATABASE_URL="$DATABASE_URL"             -e DIRECT_URL="$DIRECT_URL"             -e REDIS_URL="$REDIS_URL"             -e JWT_ACCESS_SECRET="$JWT_ACCESS_SECRET"             -e JWT_REFRESH_SECRET="$JWT_REFRESH_SECRET"             -e JWT_ACCESS_TTL=15m             -e JWT_REFRESH_TTL=30d             -e TOKEN_ENCRYPTION_KEY="$TOKEN_ENCRYPTION_KEY"             -e MP_CLIENT_ID="$MP_CLIENT_ID"             -e MP_CLIENT_SECRET="$MP_CLIENT_SECRET"             -e MP_REDIRECT_URI="$MP_REDIRECT_URI"             -e MP_WEBHOOK_SECRET="$MP_WEBHOOK_SECRET"             -e MP_WEBHOOK_URL="$MP_WEBHOOK_URL"             -e MP_MARKETPLACE_FEE_RATE=0.08             -e WEB_PUBLIC_URL="$WEB_PUBLIC_URL"             -e API_PUBLIC_URL="$API_PUBLIC_URL"             -e S3_ENDPOINT="$S3_ENDPOINT"             -e S3_REGION="$S3_REGION"             -e S3_BUCKET="$S3_BUCKET"             -e S3_ACCESS_KEY="$S3_ACCESS_KEY"             -e S3_SECRET_KEY="$S3_SECRET_KEY"             -e S3_FORCE_PATH_STYLE="$S3_FORCE_PATH_STYLE"             -e S3_PUBLIC_URL="$S3_PUBLIC_URL"             multiventas-api-smoke
+
+          cleanup_docker() {
+            docker logs multiventas-api-smoke || true
+            docker rm -f multiventas-api-smoke >/dev/null 2>&1 || true
+          }
+          trap cleanup_docker EXIT
+
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent --show-error http://127.0.0.1:3001/api/health > /tmp/docker-health.json; then
+              cat /tmp/docker-health.json
+              exit 0
+            fi
+
+            if [ "$(docker inspect -f '{{.State.Running}}' multiventas-api-smoke)" != "true" ]; then
+              echo "API Docker container exited before becoming healthy"
+              docker logs multiventas-api-smoke
+              exit 1
+            fi
+
+            sleep 1
+          done
+
+          echo "API Docker container did not become healthy within 30 seconds"
+          docker logs multiventas-api-smoke
+          exit 1
