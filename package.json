@@ -4,12 +4,13 @@
   "private": true,
   "packageManager": "pnpm@9.15.4",
   "scripts": {
-    "dev": "pnpm -r --parallel dev",
-    "build": "pnpm -r build",
+    "dev": "pnpm --filter @multiventas/db build && pnpm --parallel --filter @multiventas/api --filter @multiventas/web dev",
+    "build": "pnpm --filter @multiventas/db build && pnpm --filter @multiventas/api build && pnpm --filter @multiventas/web build",
     "lint": "pnpm -r lint",
     "typecheck": "pnpm -r typecheck",
     "db:generate": "pnpm --filter @multiventas/db prisma:generate",
     "db:migrate": "pnpm --filter @multiventas/db prisma:migrate",
+    "db:deploy": "pnpm --filter @multiventas/db prisma:deploy",
     "db:seed": "pnpm --filter @multiventas/db prisma:seed"
   }
 }

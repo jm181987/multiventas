@@ -25,9 +25,10 @@ class WebhookQueueService implements OnModuleInit, OnModuleDestroy {
   }
 
   enqueueMercadoPago(payload: any) {
-    const id = [payload?.type, payload?.action, payload?.data?.id].filter(Boolean).join(':');
+    const rawId = [payload?.type, payload?.action, payload?.data?.id].filter(Boolean).join('-');
+    const jobId = rawId ? rawId.replace(/[^a-zA-Z0-9_-]/g, '_') : undefined;
     return this.queue.add('mercadopago', { payload }, {
-      jobId: id || undefined,
+      jobId,
       attempts: 6,
       backoff: { type: 'exponential', delay: 2_000 },
       removeOnComplete: 1_000,

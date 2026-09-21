@@ -12,17 +12,14 @@ FROM deps AS build
 COPY tsconfig.base.json ./
 COPY packages/db packages/db
 COPY apps/api apps/api
-RUN pnpm --filter @multiventas/db prisma:generate
+RUN pnpm --filter @multiventas/db build
 RUN pnpm --filter @multiventas/api build
 
 FROM node:22-alpine AS runner
 WORKDIR /app
 ENV NODE_ENV=production
 RUN corepack enable
-COPY --from=build /app/node_modules ./node_modules
-COPY --from=build /app/apps/api/dist ./apps/api/dist
-COPY --from=build /app/apps/api/package.json ./apps/api/package.json
-COPY --from=build /app/packages/db ./packages/db
+COPY --from=build /app /app
 WORKDIR /app/apps/api
 EXPOSE 3001
 CMD ["node", "dist/main.js"]
