@@ -6,7 +6,12 @@ class HealthController {
   constructor(private readonly db: DbService) {}
 
   @Get()
-  async health() {
+  live() {
+    return { status: 'ok', service: 'api', timestamp: new Date().toISOString() };
+  }
+
+  @Get('ready')
+  async ready() {
     await this.db.client.$queryRaw`SELECT 1`;
     return { status: 'ok', database: 'ok', timestamp: new Date().toISOString() };
   }
