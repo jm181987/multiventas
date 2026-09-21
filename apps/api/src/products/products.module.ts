@@ -1,10 +1,26 @@
-import { BadRequestException, Body, Controller, Get, Injectable, Module, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
+import {
+  BadRequestException,
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Injectable,
+  Module,
+  Param,
+  Patch,
+  Post,
+  Query,
+  UploadedFile,
+  UseGuards,
+  UseInterceptors,
+} from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 import { Type } from 'class-transformer';
 import { IsIn, IsInt, IsNumber, IsOptional, IsPositive, IsString, Max, Min } from 'class-validator';
 import { DbService } from '../common/db.service';
 import { AuthUser, CurrentUser, Roles } from '../common/decorators';
 import { JwtAuthGuard, RolesGuard } from '../common/guards';
-import { ProductStatus, UserRole } from '@multiventas/db';
+import { Prisma, ProductStatus, UserRole } from '@multiventas/db';
 import { StorageService } from '../storage/storage.module';
 
 class ProductQueryDto {
@@ -30,11 +46,11 @@ class ProductDto {
 }
 
 class ProductUpdateDto {
-  @IsOptional() @IsString() categoryId?: string;
-  @IsOptional() @IsString() sku?: string;
+  @IsOptional() @IsString() categoryId?: string | null;
+  @IsOptional() @IsString() sku?: string | null;
   @IsOptional() @IsString() slug?: string;
   @IsOptional() @IsString() title?: string;
-  @IsOptional() @IsString() description?: string;
+  @IsOptional() @IsString() description?: string | null;
   @IsOptional() @Type(() => Number) @IsNumber() @IsPositive() price?: number;
   @IsOptional() @Type(() => Number) @IsInt() @Min(0) stock?: number;
   @IsOptional() @IsIn([ProductStatus.DRAFT, ProductStatus.ACTIVE, ProductStatus.ARCHIVED]) status?: ProductStatus;
@@ -67,6 +83,7 @@ class ProductsService {
         },
       } : {}),
     };
+
     const [items, total] = await Promise.all([
       this.db.client.product.findMany({
         where,
@@ -83,39 +100,104 @@ class ProductsService {
   byId(id: string) {
     return this.db.client.product.findFirst({
       where: { id, status: ProductStatus.ACTIVE, deletedAt: null },
-      include: { images: { orderBy: { sortOrder: 'asc' } }, store: true, category: true, reviews: { where: { status: 'PUBLISHED' }, take: 20 } },
+      include: {
+        images: { orderBy: { sortOrder: 'asc' } },
+        store: true,
+        category: true,
+        reviews: { where: { status: 'PUBLISHED' }, take: 20 },
+      },
     });
   }
 
   mine() {
     return this.db.client.product.findMany({
       where: { deletedAt: null },
-      include: { images: true, store: true, category: true },
+      include: { images: { orderBy: { sortOrder: 'asc' } }, store: true, category: true },
       orderBy: { createdAt: 'desc' },
     });
+  }
+
+  private async ownedProduct(tenantId: string, productId: string) {
+    const product = await this.db.client.product.findFirst({
+      where: { id: productId, tenantId, deletedAt: null },
+    });
+    if (!product) throw new BadRequestException('Producto inválido');
+    return product;
+  }
+
+  private writeError(error: unknown): never {
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+      throw new BadRequestException('El slug o SKU ya está en uso en esta tienda');
+    }
+    throw error;
   }
 
   async create(tenantId: string, dto: ProductDto) {
     const store = await this.db.client.store.findFirst({ where: { id: dto.storeId, tenantId, deletedAt: null } });
     if (!store) throw new BadRequestException('Tienda inválida');
-    return this.db.client.product.create({
-      data: { tenantId, ...dto, status: ProductStatus.DRAFT },
+    try {
+      return await this.db.client.product.create({
+        data: { tenantId, ...dto, status: ProductStatus.DRAFT },
+        include: { images: true, store: true, category: true },
+      });
+    } catch (error) {
+      this.writeError(error);
+    }
+  }
+
+  async update(tenantId: string, id: string, dto: ProductUpdateDto) {
+    await this.ownedProduct(tenantId, id);
+    try {
+      return await this.db.client.product.update({
+        where: { id },
+        data: dto,
+        include: { images: { orderBy: { sortOrder: 'asc' } }, store: true, category: true },
+      });
+    } catch (error) {
+      this.writeError(error);
+    }
+  }
+
+  async softDelete(tenantId: string, id: string) {
+    await this.ownedProduct(tenantId, id);
+    return this.db.client.product.update({
+      where: { id },
+      data: { deletedAt: new Date(), status: ProductStatus.ARCHIVED },
     });
   }
 
-  update(id: string, dto: ProductUpdateDto) {
-    return this.db.client.product.update({ where: { id }, data: dto });
-  }
-
-  softDelete(id: string) {
-    return this.db.client.product.update({ where: { id }, data: { deletedAt: new Date(), status: ProductStatus.ARCHIVED } });
-  }
-
-  addImage(tenantId: string, productId: string, dto: ImageDto) {
+  async addImage(tenantId: string, productId: string, dto: ImageDto) {
+    await this.ownedProduct(tenantId, productId);
     return this.db.client.productImage.create({ data: { tenantId, productId, ...dto } });
   }
 
-  uploadUrl(tenantId: string, productId: string, filename: string, contentType: string) {
+  async uploadImage(tenantId: string, productId: string, file: any, alt?: string) {
+    await this.ownedProduct(tenantId, productId);
+    if (!file) throw new BadRequestException('No se recibió ninguna imagen');
+    if (!String(file.mimetype ?? '').startsWith('image/')) throw new BadRequestException('El archivo debe ser una imagen');
+
+    const uploaded = await this.storage.uploadProductImage(
+      tenantId,
+      productId,
+      file.originalname ?? 'imagen',
+      file.mimetype,
+      file.buffer,
+    );
+
+    return this.db.client.productImage.create({
+      data: { tenantId, productId, url: uploaded.publicUrl, alt: alt || undefined },
+    });
+  }
+
+  async removeImage(tenantId: string, productId: string, imageId: string) {
+    await this.ownedProduct(tenantId, productId);
+    const image = await this.db.client.productImage.findFirst({ where: { id: imageId, productId, tenantId } });
+    if (!image) throw new BadRequestException('Imagen inválida');
+    return this.db.client.productImage.delete({ where: { id: imageId } });
+  }
+
+  async uploadUrl(tenantId: string, productId: string, filename: string, contentType: string) {
+    await this.ownedProduct(tenantId, productId);
     return this.storage.createProductUploadUrl(tenantId, productId, filename, contentType);
   }
 }
@@ -123,10 +205,8 @@ class ProductsService {
 @Controller('products')
 class PublicProductsController {
   constructor(private readonly products: ProductsService) {}
-  @Get()
-  search(@Query() query: ProductQueryDto) { return this.products.search(query); }
-  @Get(':id')
-  byId(@Param('id') id: string) { return this.products.byId(id); }
+  @Get() search(@Query() query: ProductQueryDto) { return this.products.search(query); }
+  @Get(':id') byId(@Param('id') id: string) { return this.products.byId(id); }
 }
 
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -144,13 +224,29 @@ class VendorProductsController {
   }
 
   @Patch(':id')
-  update(@Param('id') id: string, @Body() dto: ProductUpdateDto) {
-    return this.products.update(id, dto);
+  update(@CurrentUser() user: AuthUser, @Param('id') id: string, @Body() dto: ProductUpdateDto) {
+    return this.products.update(user.tenantId!, id, dto);
   }
 
   @Post(':id/images')
   image(@CurrentUser() user: AuthUser, @Param('id') id: string, @Body() dto: ImageDto) {
     return this.products.addImage(user.tenantId!, id, dto);
+  }
+
+  @Post(':id/images/upload')
+  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: 5 * 1024 * 1024 } }))
+  uploadImage(
+    @CurrentUser() user: AuthUser,
+    @Param('id') id: string,
+    @UploadedFile() file: any,
+    @Body('alt') alt?: string,
+  ) {
+    return this.products.uploadImage(user.tenantId!, id, file, alt);
+  }
+
+  @Delete(':id/images/:imageId')
+  removeImage(@CurrentUser() user: AuthUser, @Param('id') id: string, @Param('imageId') imageId: string) {
+    return this.products.removeImage(user.tenantId!, id, imageId);
   }
 
   @Get(':id/upload-url')
@@ -164,7 +260,9 @@ class VendorProductsController {
   }
 
   @Post(':id/archive')
-  archive(@Param('id') id: string) { return this.products.softDelete(id); }
+  archive(@CurrentUser() user: AuthUser, @Param('id') id: string) {
+    return this.products.softDelete(user.tenantId!, id);
+  }
 }
 
 @Module({

@@ -114,9 +114,20 @@ echo "$vendor_stores" | jq -e 'length == 1 and .[0].slug == "ci-store"' >/dev/nu
 
 vendor_product_body=$(jq -cn --arg storeId "$store_id" '{storeId:$storeId,slug:"ci-product",sku:"CI-001",title:"CI Product",price:999,stock:5}')
 request POST /vendor/products "$vendor_access" "$vendor_product_body" >/tmp/vendor-product.json || fail "vendor product create"
+vendor_product_id=$(jq -r '.id // empty' /tmp/vendor-product.json)
+[ -n "$vendor_product_id" ] || fail "created vendor product id missing"
+
+request PATCH "/vendor/products/$vendor_product_id" "$vendor_access" '{"title":"CI Product Updated","price":1299,"stock":8,"status":"ACTIVE"}' >/tmp/vendor-product-update.json || fail "vendor product update"
+jq -e '.title == "CI Product Updated" and (.price|tonumber) == 1299 and .stock == 8 and .status == "ACTIVE"' /tmp/vendor-product-update.json >/dev/null || fail "vendor product update not persisted"
+
+request POST "/vendor/products/$vendor_product_id/images" "$vendor_access" '{"url":"https://example.com/ci-product.jpg","alt":"CI Product"}' >/tmp/vendor-product-image.json || fail "vendor product image add"
+vendor_image_id=$(jq -r '.id // empty' /tmp/vendor-product-image.json)
+[ -n "$vendor_image_id" ] || fail "vendor product image id missing"
 
 vendor_products=$(request GET /vendor/products "$vendor_access") || fail "vendor products"
-echo "$vendor_products" | jq -e 'length == 1 and .[0].slug == "ci-product"' >/dev/null || fail "tenant product isolation failed"
+echo "$vendor_products" | jq -e 'length == 1 and .[0].slug == "ci-product" and .[0].status == "ACTIVE" and .[0].stock == 8 and (. [0].images | length) == 1' >/dev/null || fail "tenant product management failed"
+
+request DELETE "/vendor/products/$vendor_product_id/images/$vendor_image_id" "$vendor_access" >/tmp/vendor-product-image-delete.json || fail "vendor product image delete"
 
 admin_body=$(jq -cn '{email:"admin@multiventas.local",password:"ChangeMeNow123!"}')
 admin=$(request POST /auth/login "" "$admin_body") || fail "admin login"

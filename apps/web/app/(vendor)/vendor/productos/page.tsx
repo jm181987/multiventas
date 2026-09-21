@@ -1,2 +1,5 @@
-import { DashboardResource } from '@/components/DashboardResource';
-export default function VendorProductsPage() { return <DashboardResource title="Productos" endpoint="/vendor/products" />; }
+import { ProductManager } from '@/components/ProductManager';
+
+export default function VendorProductsPage() {
+  return <ProductManager />;
+}
