@@ -81,6 +81,10 @@ buyer_refresh=$(echo "$buyer" | jq -r '.refreshToken // empty')
 session=$(request GET /auth/session "$buyer_access") || fail "buyer session"
 echo "$session" | jq -e '.email == "ci-buyer@multiventas.test"' >/dev/null || fail "buyer session invalid"
 
+request PATCH /users/me "$buyer_access" '{"name":"CI Buyer Updated","phone":"+59899111222"}' >/tmp/profile-update.json || fail "profile update"
+profile=$(request GET /users/me "$buyer_access") || fail "profile get"
+echo "$profile" | jq -e '.name == "CI Buyer Updated" and .phone == "+59899111222" and (.avatarUrl == null)' >/dev/null || fail "profile update not persisted"
+
 cart_add_body=$(jq -cn --arg id "$product_id" '{productId:$id,quantity:1}')
 request POST /cart "$buyer_access" "$cart_add_body" >/tmp/cart-add.json || fail "cart add"
 
@@ -133,6 +137,12 @@ echo "$vendor_me" | jq -e '.status == "APPROVED" and .kycStatus == "VERIFIED"' >
 
 vendor_stores=$(request GET /vendor/stores "$vendor_access") || fail "vendor stores after approval"
 echo "$vendor_stores" | jq -e 'length == 1 and .[0].slug == "ci-store" and .[0].status == "ACTIVE"' >/dev/null || fail "vendor store was not activated on approval"
+
+request PATCH "/vendor/stores/$store_id" "$vendor_access" '{"name":"CI Store Branded","description":"Brand test","primaryColor":"#112233"}' >/tmp/store-branding.json || fail "store branding update"
+jq -e '.name == "CI Store Branded" and .description == "Brand test" and .primaryColor == "#112233"' /tmp/store-branding.json >/dev/null || fail "store branding not persisted"
+
+public_store=$(request GET /stores/ci-store) || fail "public branded store"
+echo "$public_store" | jq -e '.name == "CI Store Branded" and .primaryColor == "#112233"' >/dev/null || fail "public store branding missing"
 
 request PATCH "/vendor/products/$vendor_product_id" "$vendor_access" '{"title":"CI Product Updated","price":1299,"stock":8,"status":"ACTIVE"}' >/tmp/vendor-product-update.json || fail "vendor product update"
 jq -e '.title == "CI Product Updated" and (.price|tonumber) == 1299 and .stock == 8 and .status == "ACTIVE"' /tmp/vendor-product-update.json >/dev/null || fail "vendor product update not persisted"
