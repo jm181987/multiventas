@@ -22,4 +22,5 @@ RUN corepack enable
 COPY --from=build /app /app
 WORKDIR /app/apps/api
 EXPOSE 3001
-CMD ["node", "dist/main.js"]
+HEALTHCHECK --interval=30s --timeout=5s --start-period=45s --retries=5 CMD wget --spider -q http://127.0.0.1:3001/api/health || exit 1
+CMD ["sh", "-c", "pnpm --dir /app/packages/db prisma:deploy && node dist/main.js"]
