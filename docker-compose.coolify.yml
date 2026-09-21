@@ -12,7 +12,9 @@ services:
       retries: 10
 
   minio:
-    image: minio/minio:latest
+    build:
+      context: .
+      dockerfile: infra/minio/Dockerfile
     restart: unless-stopped
     command: server /data --console-address ":9001"
     environment:
@@ -25,7 +27,9 @@ services:
       - "9001"
 
   minio-init:
-    image: quay.io/minio/mc:latest
+    build:
+      context: .
+      dockerfile: infra/minio/Dockerfile
     restart: "no"
     environment:
       MINIO_ROOT_USER: ${MINIO_ROOT_USER:?}
