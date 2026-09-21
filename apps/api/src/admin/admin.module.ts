@@ -2,7 +2,7 @@ import { Controller, Get, Injectable, Module, UseGuards } from '@nestjs/common';
 import { DbService } from '../common/db.service';
 import { Roles } from '../common/decorators';
 import { JwtAuthGuard, RolesGuard } from '../common/guards';
-import { ProductStatus, StoreStatus, UserRole, VendorStatus } from '@multiventas/db';
+import { OrderStatus, UserRole, VendorStatus } from '@multiventas/db';
 
 @Injectable()
 class AdminService {
@@ -15,35 +15,30 @@ class AdminService {
       pendingVendors,
       approvedVendors,
       stores,
-      activeStores,
       products,
-      activeProducts,
       orders,
+      pendingOrders,
       gross,
       commissions,
-      recentVendors,
     ] = await Promise.all([
       this.db.client.user.count({ where: { deletedAt: null } }),
       this.db.client.vendor.count({ where: { deletedAt: null } }),
       this.db.client.vendor.count({ where: { deletedAt: null, status: VendorStatus.PENDING } }),
       this.db.client.vendor.count({ where: { deletedAt: null, status: VendorStatus.APPROVED } }),
       this.db.client.store.count({ where: { deletedAt: null } }),
-      this.db.client.store.count({ where: { deletedAt: null, status: StoreStatus.ACTIVE } }),
       this.db.client.product.count({ where: { deletedAt: null } }),
-      this.db.client.product.count({ where: { deletedAt: null, status: ProductStatus.ACTIVE } }),
       this.db.client.order.count(),
+      this.db.client.order.count({ where: { status: OrderStatus.PENDING } }),
       this.db.client.order.aggregate({ _sum: { total: true } }),
       this.db.client.commission.aggregate({ _sum: { amount: true } }),
-      this.db.client.vendor.findMany({
-        where: { deletedAt: null },
-        include: {
-          user: { select: { id: true, email: true, name: true, avatarUrl: true } },
-          stores: { select: { id: true, name: true, slug: true, status: true }, take: 3 },
-        },
-        orderBy: { createdAt: 'desc' },
-        take: 6,
-      }),
     ]);
+
+    const recentVendors = await this.db.client.vendor.findMany({
+      where: { deletedAt: null },
+      include: { user: { select: { email: true, name: true } }, stores: true },
+      orderBy: { createdAt: 'desc' },
+      take: 5,
+    });
 
     return {
       users,
@@ -51,10 +46,9 @@ class AdminService {
       pendingVendors,
       approvedVendors,
       stores,
-      activeStores,
       products,
-      activeProducts,
       orders,
+      pendingOrders,
       grossSales: gross._sum.total ?? 0,
       platformCommissions: commissions._sum.amount ?? 0,
       recentVendors,
@@ -80,17 +74,8 @@ class AdminService {
   commissions() {
     return this.db.client.commission.findMany({
       include: {
-        vendor: {
-          include: {
-            user: { select: { id: true, name: true, email: true } },
-          },
-        },
-        order: {
-          include: {
-            store: { select: { id: true, name: true, slug: true } },
-            buyer: { select: { id: true, name: true, email: true } },
-          },
-        },
+        vendor: { include: { user: { select: { name: true, email: true } } } },
+        order: { include: { store: true } },
         payment: true,
       },
       orderBy: { createdAt: 'desc' },
