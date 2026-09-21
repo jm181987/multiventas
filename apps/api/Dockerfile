@@ -1,5 +1,5 @@
 FROM node:22-alpine AS base
-RUN corepack enable
+RUN apk add --no-cache openssl && corepack enable
 WORKDIR /app
 
 FROM base AS deps
@@ -14,12 +14,13 @@ COPY packages/db packages/db
 COPY apps/api apps/api
 RUN pnpm --filter @multiventas/db prisma:generate
 RUN pnpm --filter @multiventas/db build
-RUN pnpm --filter @multiventas/api build
+RUN pnpm --filter @multiventas/api exec tsc -p tsconfig.json --incremental false
+RUN test -f /app/apps/api/dist/main.js
 
 FROM node:22-alpine AS runner
 WORKDIR /app
 ENV NODE_ENV=production
-RUN corepack enable
+RUN apk add --no-cache openssl && corepack enable
 COPY --from=build /app /app
 WORKDIR /app/apps/api
 EXPOSE 3001
