@@ -1,4 +1,4 @@
-import { Controller, Get, Module } from '@nestjs/common';
+import { Controller, Get, Module, ServiceUnavailableException } from '@nestjs/common';
 import { DbService } from '../common/db.service';
 import { SkipTenantContext } from '../common/decorators';
 
@@ -14,8 +14,22 @@ class HealthController {
 
   @Get('ready')
   async ready() {
-    await this.db.client.$queryRaw`SELECT 1`;
-    return { status: 'ok', database: 'ok', timestamp: new Date().toISOString() };
+    const [schema] = await this.db.client.$queryRaw<Array<{ users: string | null; migrations: string | null }>>`
+      SELECT
+        to_regclass('public.users')::text AS users,
+        to_regclass('public._prisma_migrations')::text AS migrations
+    `;
+
+    if (!schema?.users || !schema?.migrations) {
+      throw new ServiceUnavailableException('Base de datos conectada pero esquema/migraciones no están listos');
+    }
+
+    return {
+      status: 'ok',
+      database: 'ok',
+      schema: 'ok',
+      timestamp: new Date().toISOString(),
+    };
   }
 }
 
