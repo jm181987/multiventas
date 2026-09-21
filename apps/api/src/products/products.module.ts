@@ -20,7 +20,7 @@ import { IsIn, IsInt, IsNumber, IsOptional, IsPositive, IsString, Max, Min } fro
 import { DbService } from '../common/db.service';
 import { AuthUser, CurrentUser, Roles } from '../common/decorators';
 import { JwtAuthGuard, RolesGuard } from '../common/guards';
-import { Prisma, ProductStatus, UserRole } from '@multiventas/db';
+import { Prisma, ProductStatus, StoreStatus, UserRole, VendorStatus } from '@multiventas/db';
 import { StorageService } from '../storage/storage.module';
 
 class ProductQueryDto {
@@ -66,16 +66,29 @@ class ImageDto {
 class ProductsService {
   constructor(private readonly db: DbService, private readonly storage: StorageService) {}
 
+  private normalizeProduct<T>(product: T): T {
+    const value = product as any;
+    if (!value?.images) return product;
+    return {
+      ...value,
+      images: value.images.map((image: any) => ({
+        ...image,
+        url: this.storage.normalizeProductImageUrl(image.url),
+      })),
+    } as T;
+  }
+
   async search(query: ProductQueryDto) {
     const where: any = {
       status: ProductStatus.ACTIVE,
       deletedAt: null,
+      store: { status: StoreStatus.ACTIVE, deletedAt: null },
       ...(query.q ? { OR: [
         { title: { contains: query.q, mode: 'insensitive' } },
         { description: { contains: query.q, mode: 'insensitive' } },
       ] } : {}),
       ...(query.category ? { category: { slug: query.category } } : {}),
-      ...(query.store ? { store: { slug: query.store } } : {}),
+      ...(query.store ? { store: { slug: query.store, status: StoreStatus.ACTIVE, deletedAt: null } } : {}),
       ...((query.minPrice ?? query.maxPrice) ? {
         price: {
           ...(query.minPrice !== undefined ? { gte: query.minPrice } : {}),
@@ -94,12 +107,18 @@ class ProductsService {
       }),
       this.db.client.product.count({ where }),
     ]);
-    return { items, total, page: query.page, limit: query.limit };
+
+    return { items: items.map((item) => this.normalizeProduct(item)), total, page: query.page, limit: query.limit };
   }
 
-  byId(id: string) {
-    return this.db.client.product.findFirst({
-      where: { id, status: ProductStatus.ACTIVE, deletedAt: null },
+  async byId(id: string) {
+    const product = await this.db.client.product.findFirst({
+      where: {
+        id,
+        status: ProductStatus.ACTIVE,
+        deletedAt: null,
+        store: { status: StoreStatus.ACTIVE, deletedAt: null },
+      },
       include: {
         images: { orderBy: { sortOrder: 'asc' } },
         store: true,
@@ -107,14 +126,16 @@ class ProductsService {
         reviews: { where: { status: 'PUBLISHED' }, take: 20 },
       },
     });
+    return product ? this.normalizeProduct(product) : null;
   }
 
-  mine() {
-    return this.db.client.product.findMany({
+  async mine() {
+    const items = await this.db.client.product.findMany({
       where: { deletedAt: null },
       include: { images: { orderBy: { sortOrder: 'asc' } }, store: true, category: true },
       orderBy: { createdAt: 'desc' },
     });
+    return items.map((item) => this.normalizeProduct(item));
   }
 
   private async ownedProduct(tenantId: string, productId: string) {
@@ -132,27 +153,56 @@ class ProductsService {
     throw error;
   }
 
+  private async ensurePublishable(tenantId: string, storeId: string) {
+    const vendor = await this.db.client.vendor.findFirst({
+      where: { id: tenantId, deletedAt: null },
+    });
+    if (!vendor || vendor.status !== VendorStatus.APPROVED) {
+      throw new BadRequestException('Tu cuenta de vendedor debe estar aprobada antes de publicar productos');
+    }
+
+    const store = await this.db.client.store.findFirst({
+      where: { id: storeId, tenantId, deletedAt: null },
+    });
+    if (!store) throw new BadRequestException('Tienda inválida');
+    if (store.status === StoreStatus.SUSPENDED) {
+      throw new BadRequestException('La tienda está suspendida y no puede publicar productos');
+    }
+    if (store.status === StoreStatus.DRAFT) {
+      await this.db.client.store.update({
+        where: { id: store.id },
+        data: { status: StoreStatus.ACTIVE },
+      });
+    }
+  }
+
   async create(tenantId: string, dto: ProductDto) {
     const store = await this.db.client.store.findFirst({ where: { id: dto.storeId, tenantId, deletedAt: null } });
     if (!store) throw new BadRequestException('Tienda inválida');
     try {
-      return await this.db.client.product.create({
+      const product = await this.db.client.product.create({
         data: { tenantId, ...dto, status: ProductStatus.DRAFT },
         include: { images: true, store: true, category: true },
       });
+      return this.normalizeProduct(product);
     } catch (error) {
       this.writeError(error);
     }
   }
 
   async update(tenantId: string, id: string, dto: ProductUpdateDto) {
-    await this.ownedProduct(tenantId, id);
+    const product = await this.ownedProduct(tenantId, id);
+    if (dto.status === ProductStatus.ACTIVE) {
+      await this.ensurePublishable(tenantId, product.storeId);
+    }
+
     try {
-      return await this.db.client.product.update({
+      const updated = await this.db.client.product.update({
         where: { id },
         data: dto,
         include: { images: { orderBy: { sortOrder: 'asc' } }, store: true, category: true },
       });
+      return this.normalizeProduct(updated);
     } catch (error) {
       this.writeError(error);
     }
