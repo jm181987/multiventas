@@ -26,10 +26,9 @@ export class StorageService {
   }
 
   private publicUrl(key: string) {
-    const publicBase = this.config.getOrThrow<string>('S3_PUBLIC_URL').replace(/\/$/, '');
-    const bucket = this.config.getOrThrow<string>('S3_BUCKET');
-    const bucketBase = publicBase.endsWith(`/${bucket}`) ? publicBase : `${publicBase}/${bucket}`;
-    return `${bucketBase}/${key}`;
+    // Las imágenes se sirven por el mismo dominio del frontend.
+    // Así el navegador no depende de que MinIO tenga un dominio público separado.
+    return `/media/${key}`;
   }
 
   async createProductUploadUrl(tenantId: string, productId: string, filename: string, contentType: string) {
