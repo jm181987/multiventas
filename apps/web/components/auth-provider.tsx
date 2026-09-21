@@ -22,6 +22,7 @@ type Profile = {
   id: string;
   email: string;
   name?: string;
+  avatarUrl?: string | null;
   roles: string[];
 };
 
@@ -55,6 +56,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         id: profile?.id ?? claims.sub,
         email: profile?.email ?? claims.email,
         name: profile?.name ?? stored?.name,
+        avatarUrl: profile?.avatarUrl ?? stored?.avatarUrl,
         roles: claims.roles ?? profile?.roles ?? stored?.roles ?? [],
         tenantId: claims.tenantId ?? stored?.tenantId,
       };
