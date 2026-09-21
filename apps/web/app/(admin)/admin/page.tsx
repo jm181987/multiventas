@@ -1,2 +1,2 @@
-import { DashboardResource } from '@/components/DashboardResource';
-export default function AdminPage() { return <DashboardResource title="Panel administrativo" endpoint="/admin/dashboard" />; }
+import { AdminOverview } from '@/components/AdminOverview';
+export default function AdminPage() { return <AdminOverview />; }
