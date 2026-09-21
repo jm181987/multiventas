@@ -1,2 +1,2 @@
-import { DashboardResource } from '@/components/DashboardResource';
-export default function TransactionsPage() { return <DashboardResource title="Transacciones" endpoint="/admin/transactions" />; }
+import { AdminTransactions } from '@/components/AdminTransactions';
+export default function TransactionsPage() { return <AdminTransactions />; }

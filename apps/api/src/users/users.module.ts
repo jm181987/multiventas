@@ -1,15 +1,20 @@
 import { BadRequestException, Body, Controller, Delete, Get, Injectable, Module, Param, Patch, UploadedFile, UseGuards, UseInterceptors } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
-import { IsOptional, IsString } from 'class-validator';
+import { IsIn, IsOptional, IsString } from 'class-validator';
 import { DbService } from '../common/db.service';
 import { CurrentUser, Roles, AuthUser } from '../common/decorators';
 import { JwtAuthGuard, RolesGuard } from '../common/guards';
-import { UserRole } from '@multiventas/db';
+import { UserRole, UserStatus } from '@multiventas/db';
 import { StorageService } from '../storage/storage.module';
 
 class UpdateMeDto {
   @IsOptional() @IsString() name?: string;
   @IsOptional() @IsString() phone?: string;
+}
+
+class AdminUserStatusDto {
+  @IsIn([UserStatus.ACTIVE, UserStatus.SUSPENDED])
+  status!: UserStatus;
 }
 
 @Injectable()
@@ -79,6 +84,14 @@ class UsersService {
     return this.normalize(user);
   }
 
+  setStatus(id: string, status: UserStatus) {
+    return this.db.client.user.update({
+      where: { id },
+      data: { status },
+      select: { id: true, email: true, name: true, avatarUrl: true, roles: true, status: true, createdAt: true },
+    });
+  }
+
   remove(id: string) {
     return this.db.client.user.update({ where: { id }, data: { deletedAt: new Date() } });
   }
@@ -112,6 +125,16 @@ class UsersController {
   @UseGuards(RolesGuard)
   @Get()
   list() { return this.users.list(); }
+
+  @Roles(UserRole.ADMIN)
+  @UseGuards(RolesGuard)
+  @Patch(':id/status')
+  setStatus(@CurrentUser() actor: AuthUser, @Param('id') id: string, @Body() dto: AdminUserStatusDto) {
+    if (actor.sub === id && dto.status === UserStatus.SUSPENDED) {
+      throw new BadRequestException('No puedes suspender tu propia cuenta administrativa');
+    }
+    return this.users.setStatus(id, dto.status);
+  }
 
   @Roles(UserRole.ADMIN)
   @UseGuards(RolesGuard)
