@@ -1,2 +1,2 @@
-import { AdminUsers } from '@/components/AdminUsers';
-export default function UsersPage() { return <AdminUsers />; }
+import { AdminUsersManager } from '@/components/AdminUsersManager';
+export default function UsersPage() { return <AdminUsersManager />; }

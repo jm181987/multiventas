@@ -1,2 +1,2 @@
-import { AdminVendors } from '@/components/AdminVendors';
-export default function VendorsPage() { return <AdminVendors />; }
+import { AdminVendorsManager } from '@/components/AdminVendorsManager';
+export default function VendorsPage() { return <AdminVendorsManager />; }
