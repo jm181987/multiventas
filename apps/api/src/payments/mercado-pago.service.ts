@@ -242,7 +242,7 @@ export class MercadoPagoService {
         data: { status: CommissionStatus.CONFIRMED },
       });
     } else if (
-      [PaymentStatus.CANCELLED, PaymentStatus.REJECTED].includes(status) &&
+      (status === PaymentStatus.CANCELLED || status === PaymentStatus.REJECTED) &&
       previousStatus === PaymentStatus.PENDING
     ) {
       const order = await this.db.client.order.findUnique({
@@ -265,7 +265,7 @@ export class MercadoPagoService {
       }
     }
 
-    if ([PaymentStatus.REFUNDED, PaymentStatus.CHARGEBACK].includes(status)) {
+    if (status === PaymentStatus.REFUNDED || status === PaymentStatus.CHARGEBACK) {
       await this.db.client.commission.updateMany({
         where: { orderId },
         data: { status: CommissionStatus.REFUNDED },
