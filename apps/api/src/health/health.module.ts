@@ -2,7 +2,7 @@ import { Controller, Get, Module, ServiceUnavailableException } from '@nestjs/co
 import { DbService } from '../common/db.service';
 import { SkipTenantContext } from '../common/decorators';
 
-const REQUIRED_MIGRATION = '202609220004_backfill_existing_public_catalog';
+const REQUIRED_MIGRATION = '202609220005_user_avatar';
 
 @SkipTenantContext()
 @Controller('health')
@@ -37,7 +37,7 @@ class HealthController {
     `;
 
     if (!migration?.applied) {
-      throw new ServiceUnavailableException('Esperando actualización del catálogo existente');
+      throw new ServiceUnavailableException('Esperando actualización del esquema de perfiles');
     }
 
     return {
