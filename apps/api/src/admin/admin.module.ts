@@ -28,6 +28,17 @@ class AdminService {
       platformCommissions: commissions._sum.amount ?? 0,
     };
   }
+
+  transactions() {
+    return this.db.client.payment.findMany({
+      include: {
+        order: { include: { store: true, buyer: { select: { id: true, name: true, email: true } } } },
+        commission: true,
+      },
+      orderBy: { createdAt: 'desc' },
+      take: 500,
+    });
+  }
 }
 
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -36,6 +47,7 @@ class AdminService {
 class AdminController {
   constructor(private readonly admin: AdminService) {}
   @Get('dashboard') dashboard() { return this.admin.dashboard(); }
+  @Get('transactions') transactions() { return this.admin.transactions(); }
 }
 
 @Module({ controllers: [AdminController], providers: [AdminService] })

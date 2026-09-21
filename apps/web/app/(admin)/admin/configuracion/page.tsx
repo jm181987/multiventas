@@ -1,0 +1,2 @@
+import { Card, CardContent, CardHeader } from '@/components/ui/card';
+export default function AdminSettingsPage() { return <Card><CardHeader><h1 className="text-3xl font-black">Configuración</h1></CardHeader><CardContent><p className="text-muted-foreground">Los secretos, credenciales de pasarelas, almacenamiento y URLs se administran como variables de entorno en Coolify; nunca se exponen en el frontend.</p></CardContent></Card>; }
