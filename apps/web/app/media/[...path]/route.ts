@@ -1,7 +1,7 @@
 export const dynamic = 'force-dynamic';
 
 function safePath(parts: string[]) {
-  if (!parts.length || parts[0] !== 'products') return null;
+  if (!parts.length || !['products', 'stores', 'users'].includes(parts[0])) return null;
   if (parts.some((part) => !part || part === '.' || part === '..')) return null;
   return parts.map((part) => encodeURIComponent(part)).join('/');
 }
