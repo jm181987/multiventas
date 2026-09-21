@@ -50,37 +50,6 @@ services:
         mc anonymous set download "local/$$S3_BUCKET"
         echo "Bucket $$S3_BUCKET listo"
 
-  db-migrate:
-    build:
-      context: .
-      dockerfile: apps/api/Dockerfile
-    restart: "no"
-    environment:
-      NODE_ENV: production
-      DATABASE_URL: ${DATABASE_URL:?}
-      DIRECT_URL: ${DIRECT_URL:?}
-    depends_on:
-      redis:
-        condition: service_healthy
-    healthcheck:
-      disable: true
-    command:
-      - /bin/sh
-      - -c
-      - |
-        attempt=1
-        while [ "$$attempt" -le 12 ]; do
-          echo "Prisma migrate deploy - intento $$attempt/12"
-          if pnpm --dir /app/packages/db prisma:deploy; then
-            echo "Migraciones aplicadas correctamente"
-            exit 0
-          fi
-          attempt=$$((attempt + 1))
-          sleep 5
-        done
-        echo "No se pudieron aplicar las migraciones"
-        exit 1
-
   api:
     build:
       context: .
@@ -118,8 +87,6 @@ services:
       redis:
         condition: service_healthy
       minio-init:
-        condition: service_completed_successfully
-      db-migrate:
         condition: service_completed_successfully
     healthcheck:
       test:

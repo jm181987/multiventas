@@ -23,4 +23,4 @@ RUN corepack enable
 COPY --from=build /app /app
 WORKDIR /app/apps/api
 EXPOSE 3001
-CMD ["node", "dist/main.js"]
+CMD ["sh", "/app/apps/api/docker-entrypoint.sh"]
