@@ -7,7 +7,7 @@ import {
 import { Reflector } from '@nestjs/core';
 import { from, lastValueFrom, Observable } from 'rxjs';
 import { DbService } from './db.service';
-import { SYSTEM_CONTEXT_KEY, AuthUser } from './decorators';
+import { SKIP_TENANT_CONTEXT_KEY, SYSTEM_CONTEXT_KEY, AuthUser } from './decorators';
 import { UserRole } from '@multiventas/db';
 
 @Injectable()
@@ -18,6 +18,15 @@ export class TenantInterceptor implements NestInterceptor {
   ) {}
 
   intercept(context: ExecutionContext, next: CallHandler): Observable<unknown> {
+    const skipTenantContext = this.reflector.getAllAndOverride<boolean>(SKIP_TENANT_CONTEXT_KEY, [
+      context.getHandler(),
+      context.getClass(),
+    ]);
+
+    if (skipTenantContext) {
+      return next.handle();
+    }
+
     const req = context.switchToHttp().getRequest();
     const user = req.user as AuthUser | undefined;
     const system = this.reflector.getAllAndOverride<boolean>(SYSTEM_CONTEXT_KEY, [
