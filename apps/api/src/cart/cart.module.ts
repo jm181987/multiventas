@@ -13,6 +13,10 @@ class CartItemDto {
   @IsInt() @Min(1) quantity!: number;
 }
 
+class CartQuantityDto {
+  @IsInt() @Min(1) quantity!: number;
+}
+
 @Injectable()
 export class CartService implements OnModuleDestroy {
   private readonly redis = new Redis(process.env.REDIS_URL ?? 'redis://localhost:6379', {
@@ -43,6 +47,12 @@ export class CartService implements OnModuleDestroy {
   }
 
   async update(userId: string, productId: string, quantity: number) {
+    const product = await this.db.client.product.findFirst({
+      where: { id: productId, status: ProductStatus.ACTIVE, deletedAt: null },
+    });
+    if (!product) throw new BadRequestException('Producto no disponible');
+    if (quantity > product.stock) throw new BadRequestException('Producto sin stock suficiente');
+
     const cart = await this.get(userId);
     const item = cart.find((x) => x.productId === productId);
     if (!item) throw new BadRequestException('Producto no está en el carrito');
@@ -67,7 +77,7 @@ class CartController {
   constructor(private readonly cart: CartService) {}
   @Get() get(@CurrentUser() user: AuthUser) { return this.cart.get(user.sub); }
   @Post() add(@CurrentUser() user: AuthUser, @Body() dto: CartItemDto) { return this.cart.add(user.sub, dto); }
-  @Patch(':productId') update(@CurrentUser() user: AuthUser, @Param('productId') id: string, @Body() dto: CartItemDto) {
+  @Patch(':productId') update(@CurrentUser() user: AuthUser, @Param('productId') id: string, @Body() dto: CartQuantityDto) {
     return this.cart.update(user.sub, id, dto.quantity);
   }
   @Delete(':productId') remove(@CurrentUser() user: AuthUser, @Param('productId') id: string) {
