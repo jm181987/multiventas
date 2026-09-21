@@ -3,6 +3,7 @@ set -euo pipefail
 
 BASE_URL="${BASE_URL:-http://127.0.0.1:3001/api}"
 LOG_FILE="/tmp/multiventas-functional-api.log"
+RESPONSE_FILE="/tmp/multiventas-functional-response.json"
 
 node apps/api/dist/main.js >"$LOG_FILE" 2>&1 &
 api_pid=$!
@@ -20,8 +21,38 @@ fail() {
   exit 1
 }
 
+request() {
+  local method="$1"
+  local path="$2"
+  local token="${3:-}"
+  local body="${4:-}"
+  local -a args
+  args=(--silent --show-error --output "$RESPONSE_FILE" --write-out "%{http_code}" --request "$method" "$BASE_URL$path" --header "content-type: application/json")
+  if [ -n "$token" ]; then
+    args+=(--header "authorization: Bearer $token")
+  fi
+  if [ -n "$body" ]; then
+    args+=(--data "$body")
+  fi
+
+  local status
+  status=$(curl "${args[@]}") || {
+    echo "curl failed for $method $path" >&2
+    return 1
+  }
+
+  if [ "$status" -lt 200 ] || [ "$status" -ge 300 ]; then
+    echo "$method $path -> HTTP $status" >&2
+    cat "$RESPONSE_FILE" >&2 || true
+    echo >&2
+    return 1
+  fi
+
+  cat "$RESPONSE_FILE"
+}
+
 for attempt in $(seq 1 40); do
-  if curl --fail --silent "$BASE_URL/health/ready" >/tmp/ready.json; then
+  if request GET /health/ready >/tmp/ready.json 2>/dev/null; then
     break
   fi
   if ! kill -0 "$api_pid" 2>/dev/null; then
@@ -31,67 +62,74 @@ for attempt in $(seq 1 40); do
   sleep 1
 done
 
-categories=$(curl --fail --silent "$BASE_URL/categories") || fail "categories endpoint"
+categories=$(request GET /categories) || fail "categories endpoint"
 echo "$categories" | jq -e 'length >= 3' >/dev/null || fail "seed categories missing"
 
-products=$(curl --fail --silent "$BASE_URL/products?limit=2") || fail "public products endpoint"
+products=$(request GET '/products?limit=2') || fail "public products endpoint"
 product_id=$(echo "$products" | jq -r '.items[0].id // empty')
 [ -n "$product_id" ] || fail "seed product missing"
 
-store=$(curl --fail --silent "$BASE_URL/stores/tienda-demo-1") || fail "public store endpoint"
+store=$(request GET /stores/tienda-demo-1) || fail "public store endpoint"
 echo "$store" | jq -e '.slug == "tienda-demo-1"' >/dev/null || fail "public store response invalid"
 
-buyer=$(curl --fail --silent   -X POST "$BASE_URL/auth/register/buyer"   -H 'content-type: application/json'   --data '{"email":"ci-buyer@multiventas.test","password":"TestPass123!","name":"CI Buyer"}') || fail "buyer registration"
+buyer_body=$(jq -cn '{email:"ci-buyer@multiventas.test",password:"TestPass123!",name:"CI Buyer"}')
+buyer=$(request POST /auth/register/buyer "" "$buyer_body") || fail "buyer registration"
 buyer_access=$(echo "$buyer" | jq -r '.accessToken // empty')
 buyer_refresh=$(echo "$buyer" | jq -r '.refreshToken // empty')
 [ -n "$buyer_access" ] && [ -n "$buyer_refresh" ] || fail "buyer tokens missing"
 
-session=$(curl --fail --silent "$BASE_URL/auth/session" -H "authorization: Bearer $buyer_access") || fail "buyer session"
+session=$(request GET /auth/session "$buyer_access") || fail "buyer session"
 echo "$session" | jq -e '.email == "ci-buyer@multiventas.test"' >/dev/null || fail "buyer session invalid"
 
-curl --fail --silent   -X POST "$BASE_URL/cart"   -H "authorization: Bearer $buyer_access"   -H 'content-type: application/json'   --data "{"productId":"$product_id","quantity":1}" >/tmp/cart-add.json || fail "cart add"
+cart_add_body=$(jq -cn --arg id "$product_id" '{productId:$id,quantity:1}')
+request POST /cart "$buyer_access" "$cart_add_body" >/tmp/cart-add.json || fail "cart add"
 
-curl --fail --silent   -X PATCH "$BASE_URL/cart/$product_id"   -H "authorization: Bearer $buyer_access"   -H 'content-type: application/json'   --data '{"quantity":2}' >/tmp/cart-update.json || fail "cart update"
+request PATCH "/cart/$product_id" "$buyer_access" '{"quantity":2}' >/tmp/cart-update.json || fail "cart update"
 
-cart=$(curl --fail --silent "$BASE_URL/cart" -H "authorization: Bearer $buyer_access") || fail "cart get"
+cart=$(request GET /cart "$buyer_access") || fail "cart get"
 echo "$cart" | jq -e --arg id "$product_id" 'any(.[]; .productId == $id and .quantity == 2)' >/dev/null || fail "cart quantity not updated"
 
-curl --fail --silent   -X DELETE "$BASE_URL/cart/$product_id"   -H "authorization: Bearer $buyer_access" >/tmp/cart-delete.json || fail "cart delete"
-cart=$(curl --fail --silent "$BASE_URL/cart" -H "authorization: Bearer $buyer_access") || fail "cart get after delete"
+request DELETE "/cart/$product_id" "$buyer_access" >/tmp/cart-delete.json || fail "cart delete"
+cart=$(request GET /cart "$buyer_access") || fail "cart get after delete"
 echo "$cart" | jq -e 'length == 0' >/dev/null || fail "cart not empty after delete"
 
-refreshed=$(curl --fail --silent   -X POST "$BASE_URL/auth/refresh"   -H 'content-type: application/json'   --data "{"refreshToken":"$buyer_refresh"}") || fail "token refresh"
+refresh_body=$(jq -cn --arg token "$buyer_refresh" '{refreshToken:$token}')
+refreshed=$(request POST /auth/refresh "" "$refresh_body") || fail "token refresh"
 buyer_access=$(echo "$refreshed" | jq -r '.accessToken // empty')
 [ -n "$buyer_access" ] || fail "refreshed access token missing"
 
-vendor=$(curl --fail --silent   -X POST "$BASE_URL/auth/register/vendor"   -H 'content-type: application/json'   --data '{"email":"ci-vendor@multiventas.test","password":"TestPass123!","name":"CI Vendor","businessName":"CI Comercio","storeName":"CI Store","storeSlug":"ci-store"}') || fail "vendor registration"
+vendor_body=$(jq -cn '{email:"ci-vendor@multiventas.test",password:"TestPass123!",name:"CI Vendor",businessName:"CI Comercio",storeName:"CI Store",storeSlug:"ci-store"}')
+vendor=$(request POST /auth/register/vendor "" "$vendor_body") || fail "vendor registration"
 vendor_access=$(echo "$vendor" | jq -r '.accessToken // empty')
 [ -n "$vendor_access" ] || fail "vendor token missing"
 
-vendor_me=$(curl --fail --silent "$BASE_URL/vendors/me" -H "authorization: Bearer $vendor_access") || fail "vendor profile"
+vendor_me=$(request GET /vendors/me "$vendor_access") || fail "vendor profile"
 vendor_id=$(echo "$vendor_me" | jq -r '.id // empty')
 [ -n "$vendor_id" ] || fail "vendor id missing"
 
-vendor_stores=$(curl --fail --silent "$BASE_URL/vendor/stores" -H "authorization: Bearer $vendor_access") || fail "vendor stores"
+vendor_stores=$(request GET /vendor/stores "$vendor_access") || fail "vendor stores"
 store_id=$(echo "$vendor_stores" | jq -r '.[0].id // empty')
 [ -n "$store_id" ] || fail "vendor store missing"
 echo "$vendor_stores" | jq -e 'length == 1 and .[0].slug == "ci-store"' >/dev/null || fail "tenant store isolation failed"
 
-curl --fail --silent   -X POST "$BASE_URL/vendor/products"   -H "authorization: Bearer $vendor_access"   -H 'content-type: application/json'   --data "{"storeId":"$store_id","slug":"ci-product","sku":"CI-001","title":"CI Product","price":999,"stock":5}" >/tmp/vendor-product.json || fail "vendor product create"
+vendor_product_body=$(jq -cn --arg storeId "$store_id" '{storeId:$storeId,slug:"ci-product",sku:"CI-001",title:"CI Product",price:999,stock:5}')
+request POST /vendor/products "$vendor_access" "$vendor_product_body" >/tmp/vendor-product.json || fail "vendor product create"
 
-vendor_products=$(curl --fail --silent "$BASE_URL/vendor/products" -H "authorization: Bearer $vendor_access") || fail "vendor products"
+vendor_products=$(request GET /vendor/products "$vendor_access") || fail "vendor products"
 echo "$vendor_products" | jq -e 'length == 1 and .[0].slug == "ci-product"' >/dev/null || fail "tenant product isolation failed"
 
-admin=$(curl --fail --silent   -X POST "$BASE_URL/auth/login"   -H 'content-type: application/json'   --data '{"email":"admin@multiventas.local","password":"ChangeMeNow123!"}') || fail "admin login"
+admin_body=$(jq -cn '{email:"admin@multiventas.local",password:"ChangeMeNow123!"}')
+admin=$(request POST /auth/login "" "$admin_body") || fail "admin login"
 admin_access=$(echo "$admin" | jq -r '.accessToken // empty')
 [ -n "$admin_access" ] || fail "admin token missing"
 
-dashboard=$(curl --fail --silent "$BASE_URL/admin/dashboard" -H "authorization: Bearer $admin_access") || fail "admin dashboard"
+dashboard=$(request GET /admin/dashboard "$admin_access") || fail "admin dashboard"
 echo "$dashboard" | jq -e '.users >= 4 and .vendors >= 3 and .products >= 11' >/dev/null || fail "admin dashboard counts invalid"
 
-curl --fail --silent   -X PATCH "$BASE_URL/vendors/$vendor_id/review"   -H "authorization: Bearer $admin_access"   -H 'content-type: application/json'   --data '{"status":"APPROVED","kycStatus":"VERIFIED"}' >/tmp/vendor-review.json || fail "admin vendor approval"
+review_body='{"status":"APPROVED","kycStatus":"VERIFIED"}'
+request PATCH "/vendors/$vendor_id/review" "$admin_access" "$review_body" >/tmp/vendor-review.json || fail "admin vendor approval"
 
-vendor_me=$(curl --fail --silent "$BASE_URL/vendors/me" -H "authorization: Bearer $vendor_access") || fail "vendor profile after approval"
+vendor_me=$(request GET /vendors/me "$vendor_access") || fail "vendor profile after approval"
 echo "$vendor_me" | jq -e '.status == "APPROVED" and .kycStatus == "VERIFIED"' >/dev/null || fail "vendor approval not persisted"
 
 echo "Functional smoke passed: database, auth, public catalog, cart, vendor tenant isolation and admin flows."
