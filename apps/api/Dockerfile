@@ -12,6 +12,7 @@ FROM deps AS build
 COPY tsconfig.base.json ./
 COPY packages/db packages/db
 COPY apps/api apps/api
+RUN pnpm --filter @multiventas/db prisma:generate
 RUN pnpm --filter @multiventas/db build
 RUN pnpm --filter @multiventas/api build
 
