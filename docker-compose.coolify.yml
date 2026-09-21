@@ -119,6 +119,7 @@ services:
       PORT: "3000"
       HOSTNAME: "0.0.0.0"
       NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:?}
+      INTERNAL_API_URL: http://api:80/api
       SERVICE_URL_WEB: /
     expose:
       - "80"
