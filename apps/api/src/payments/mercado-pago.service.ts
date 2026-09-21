@@ -198,13 +198,22 @@ export class MercadoPagoService {
     if (!safeEqual(v1, expected)) throw new UnauthorizedException('Firma webhook inválida');
   }
 
+  async handleWebhook(payload: any, signature: string, requestId: string, dataId: string) {
+    this.validateWebhookSignature(signature, requestId, dataId);
+    return this.processWebhookNotification(payload);
+  }
+
   async processWebhookNotification(payload: any) {
     if (payload?.type !== 'payment' || !payload?.data?.id) return { ignored: true };
     const providerUserId = payload.user_id ? String(payload.user_id) : undefined;
-    const oauth = providerUserId
+    let oauth = providerUserId
       ? await this.db.client.oAuthToken.findFirst({ where: { provider: OAuthProvider.MERCADO_PAGO, providerUserId } })
       : null;
     if (!oauth) throw new BadRequestException('No se pudo asociar el webhook a un vendedor');
+
+    await this.refreshTokenIfNeeded(oauth.tenantId);
+    oauth = await this.db.client.oAuthToken.findUnique({ where: { id: oauth.id } });
+    if (!oauth) throw new BadRequestException('Token Mercado Pago inexistente');
 
     const remote = await this.mpFetch<any>(`/v1/payments/${payload.data.id}`, this.decrypt(oauth.accessToken));
     const orderId = remote.external_reference as string | undefined;
@@ -213,7 +222,9 @@ export class MercadoPagoService {
     const payment = await this.db.client.payment.findUnique({ where: { orderId } });
     if (!payment) return { ignored: true };
 
+    const previousStatus = payment.status;
     const status = mapPaymentStatus(remote.status);
+
     await this.db.client.payment.update({
       where: { id: payment.id },
       data: {
@@ -230,10 +241,34 @@ export class MercadoPagoService {
         where: { orderId },
         data: { status: CommissionStatus.CONFIRMED },
       });
-    } else if ([PaymentStatus.CANCELLED, PaymentStatus.REJECTED].includes(status)) {
-      await this.db.client.order.updateMany({
-        where: { id: orderId, status: OrderStatus.PENDING },
-        data: { status: OrderStatus.CANCELLED },
+    } else if (
+      [PaymentStatus.CANCELLED, PaymentStatus.REJECTED].includes(status) &&
+      previousStatus === PaymentStatus.PENDING
+    ) {
+      const order = await this.db.client.order.findUnique({
+        where: { id: orderId },
+        include: { items: true },
+      });
+      if (order?.status === OrderStatus.PENDING) {
+        await this.db.client.order.update({
+          where: { id: orderId },
+          data: { status: OrderStatus.CANCELLED },
+        });
+        for (const item of order.items) {
+          if (item.productId) {
+            await this.db.client.product.update({
+              where: { id: item.productId },
+              data: { stock: { increment: item.quantity } },
+            });
+          }
+        }
+      }
+    }
+
+    if ([PaymentStatus.REFUNDED, PaymentStatus.CHARGEBACK].includes(status)) {
+      await this.db.client.commission.updateMany({
+        where: { orderId },
+        data: { status: CommissionStatus.REFUNDED },
       });
     }
 
