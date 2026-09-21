@@ -117,18 +117,6 @@ request POST /vendor/products "$vendor_access" "$vendor_product_body" >/tmp/vend
 vendor_product_id=$(jq -r '.id // empty' /tmp/vendor-product.json)
 [ -n "$vendor_product_id" ] || fail "created vendor product id missing"
 
-request PATCH "/vendor/products/$vendor_product_id" "$vendor_access" '{"title":"CI Product Updated","price":1299,"stock":8,"status":"ACTIVE"}' >/tmp/vendor-product-update.json || fail "vendor product update"
-jq -e '.title == "CI Product Updated" and (.price|tonumber) == 1299 and .stock == 8 and .status == "ACTIVE"' /tmp/vendor-product-update.json >/dev/null || fail "vendor product update not persisted"
-
-request POST "/vendor/products/$vendor_product_id/images" "$vendor_access" '{"url":"https://example.com/ci-product.jpg","alt":"CI Product"}' >/tmp/vendor-product-image.json || fail "vendor product image add"
-vendor_image_id=$(jq -r '.id // empty' /tmp/vendor-product-image.json)
-[ -n "$vendor_image_id" ] || fail "vendor product image id missing"
-
-vendor_products=$(request GET /vendor/products "$vendor_access") || fail "vendor products"
-echo "$vendor_products" | jq -e 'length == 1 and .[0].slug == "ci-product" and .[0].status == "ACTIVE" and .[0].stock == 8 and (. [0].images | length) == 1' >/dev/null || fail "tenant product management failed"
-
-request DELETE "/vendor/products/$vendor_product_id/images/$vendor_image_id" "$vendor_access" >/tmp/vendor-product-image-delete.json || fail "vendor product image delete"
-
 admin_body=$(jq -cn '{email:"admin@multiventas.local",password:"ChangeMeNow123!"}')
 admin=$(request POST /auth/login "" "$admin_body") || fail "admin login"
 admin_access=$(echo "$admin" | jq -r '.accessToken // empty')
@@ -142,5 +130,23 @@ request PATCH "/vendors/$vendor_id/review" "$admin_access" "$review_body" >/tmp/
 
 vendor_me=$(request GET /vendors/me "$vendor_access") || fail "vendor profile after approval"
 echo "$vendor_me" | jq -e '.status == "APPROVED" and .kycStatus == "VERIFIED"' >/dev/null || fail "vendor approval not persisted"
+
+vendor_stores=$(request GET /vendor/stores "$vendor_access") || fail "vendor stores after approval"
+echo "$vendor_stores" | jq -e 'length == 1 and .[0].slug == "ci-store" and .[0].status == "ACTIVE"' >/dev/null || fail "vendor store was not activated on approval"
+
+request PATCH "/vendor/products/$vendor_product_id" "$vendor_access" '{"title":"CI Product Updated","price":1299,"stock":8,"status":"ACTIVE"}' >/tmp/vendor-product-update.json || fail "vendor product update"
+jq -e '.title == "CI Product Updated" and (.price|tonumber) == 1299 and .stock == 8 and .status == "ACTIVE"' /tmp/vendor-product-update.json >/dev/null || fail "vendor product update not persisted"
+
+request POST "/vendor/products/$vendor_product_id/images" "$vendor_access" '{"url":"https://example.com/ci-product.jpg","alt":"CI Product"}' >/tmp/vendor-product-image.json || fail "vendor product image add"
+vendor_image_id=$(jq -r '.id // empty' /tmp/vendor-product-image.json)
+[ -n "$vendor_image_id" ] || fail "vendor product image id missing"
+
+vendor_products=$(request GET /vendor/products "$vendor_access") || fail "vendor products"
+echo "$vendor_products" | jq -e 'length == 1 and .[0].slug == "ci-product" and .[0].status == "ACTIVE" and .[0].stock == 8 and (. [0].images | length) == 1' >/dev/null || fail "tenant product management failed"
+
+public_vendor_products=$(request GET '/products?q=CI%20Product%20Updated') || fail "public vendor product search"
+echo "$public_vendor_products" | jq -e --arg id "$vendor_product_id" 'any(.items[]; .id == $id and .status == "ACTIVE")' >/dev/null || fail "published vendor product is not visible publicly"
+
+request DELETE "/vendor/products/$vendor_product_id/images/$vendor_image_id" "$vendor_access" >/tmp/vendor-product-image-delete.json || fail "vendor product image delete"
 
 echo "Functional smoke passed: database, auth, public catalog, cart, vendor tenant isolation and admin flows."

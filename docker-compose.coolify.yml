@@ -120,6 +120,7 @@ services:
       HOSTNAME: "0.0.0.0"
       NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:?}
       INTERNAL_API_URL: http://api:80/api
+      S3_BUCKET: ${S3_BUCKET:-multiventas}
       SERVICE_URL_WEB: /
     expose:
       - "80"

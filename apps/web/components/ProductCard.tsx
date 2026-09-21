@@ -28,7 +28,7 @@ export function ProductCard({ product }: { product: Product }) {
     <Card className="group overflow-hidden">
       <Link href={`/productos/${product.id}`} className="block">
         <div className="relative aspect-square overflow-hidden bg-muted">
-          <Image src={image} alt={product.title} fill className="object-cover transition duration-300 group-hover:scale-105" />
+          <Image src={image} alt={product.title} fill unoptimized={image.startsWith('/media/')} className="object-cover transition duration-300 group-hover:scale-105" />
         </div>
       </Link>
       <CardContent className="space-y-3 p-4">

@@ -3,7 +3,7 @@ import { IsIn, IsOptional, IsString } from 'class-validator';
 import { DbService } from '../common/db.service';
 import { AuthUser, CurrentUser, Roles } from '../common/decorators';
 import { JwtAuthGuard, RolesGuard } from '../common/guards';
-import { KycStatus, UserRole, VendorStatus } from '@multiventas/db';
+import { KycStatus, StoreStatus, UserRole, VendorStatus } from '@multiventas/db';
 
 class UpdateVendorDto {
   @IsOptional() @IsString() businessName?: string;
@@ -36,8 +36,8 @@ class VendorsService {
     });
   }
 
-  review(id: string, dto: ReviewVendorDto) {
-    return this.db.client.vendor.update({
+  async review(id: string, dto: ReviewVendorDto) {
+    const vendor = await this.db.client.vendor.update({
       where: { id },
       data: {
         status: dto.status,
@@ -45,6 +45,24 @@ class VendorsService {
         approvedAt: dto.status === VendorStatus.APPROVED ? new Date() : undefined,
       },
     });
+
+    if (dto.status === VendorStatus.APPROVED) {
+      await this.db.client.store.updateMany({
+        where: {
+          tenantId: id,
+          deletedAt: null,
+          status: { in: [StoreStatus.DRAFT, StoreStatus.SUSPENDED] },
+        },
+        data: { status: StoreStatus.ACTIVE },
+      });
+    } else {
+      await this.db.client.store.updateMany({
+        where: { tenantId: id, deletedAt: null, status: StoreStatus.ACTIVE },
+        data: { status: StoreStatus.SUSPENDED },
+      });
+    }
+
+    return this.db.client.vendor.findUnique({ where: { id: vendor.id }, include: { stores: true } });
   }
 }
 

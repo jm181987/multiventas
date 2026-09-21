@@ -26,10 +26,18 @@ export class StorageService {
   }
 
   private publicUrl(key: string) {
-    const publicBase = this.config.getOrThrow<string>('S3_PUBLIC_URL').replace(/\/$/, '');
-    const bucket = this.config.getOrThrow<string>('S3_BUCKET');
-    const bucketBase = publicBase.endsWith(`/${bucket}`) ? publicBase : `${publicBase}/${bucket}`;
-    return `${bucketBase}/${key}`;
+    // Las imágenes se sirven por el mismo dominio del frontend.
+    // Así el navegador no depende de que MinIO tenga un dominio público separado.
+    return `/media/${key}`;
+  }
+
+  normalizeProductImageUrl(url: string) {
+    if (!url || url.startsWith('/media/')) return url;
+
+    // Compatibilidad con imágenes guardadas antes de usar el proxy /media.
+    // Reconocemos únicamente la estructura de keys generada por Multiventas.
+    const match = url.match(/\/(?:multiventas\/)?(products\/[0-9a-f-]{36}\/[0-9a-f-]{36}\/[^/?#]+)(?:[?#].*)?$/i);
+    return match ? `/media/${match[1]}` : url;
   }
 
   async createProductUploadUrl(tenantId: string, productId: string, filename: string, contentType: string) {
