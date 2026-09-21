@@ -17,11 +17,12 @@ RUN pnpm --filter @multiventas/web build
 FROM node:22-alpine AS runner
 WORKDIR /app
 ENV NODE_ENV=production
-ENV PORT=80
+ENV PORT=3000
 ENV HOSTNAME=0.0.0.0
+RUN apk add --no-cache socat
 COPY --from=build /app/apps/web/.next/standalone ./
 COPY --from=build /app/apps/web/.next/static ./apps/web/.next/static
 COPY --from=build /app/apps/web/public ./apps/web/public
-EXPOSE 80
+EXPOSE 80 3000
 HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=5 CMD wget --spider -q http://127.0.0.1:80/ || exit 1
-CMD ["node", "apps/web/server.js"]
+CMD ["sh", "-c", "socat TCP-LISTEN:80,fork,reuseaddr TCP:127.0.0.1:3000 & exec node apps/web/server.js"]
