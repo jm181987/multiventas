@@ -13,24 +13,16 @@ async function main() {
     await tx.$executeRaw`SELECT set_config('app.tenant_id', '', true)`;
     await tx.$executeRaw`SELECT set_config('app.user_id', '', true)`;
 
-    const adminEmail = process.env.SEED_ADMIN_EMAIL ?? 'jorgitom18@gmail.com';
-    const existingAdmin = await tx.user.findUnique({ where: { email: adminEmail } });
-    if (existingAdmin) {
-      const roles = Array.from(new Set([...existingAdmin.roles, UserRole.ADMIN, UserRole.BUYER]));
-      await tx.user.update({
-        where: { id: existingAdmin.id },
-        data: { roles, status: 'ACTIVE' },
-      });
-    } else {
-      await tx.user.create({
-        data: {
-          email: adminEmail,
-          name: 'Admin Multiventas',
-          passwordHash: adminPassword,
-          roles: [UserRole.ADMIN, UserRole.BUYER],
-        },
-      });
-    }
+    await tx.user.upsert({
+      where: { email: 'admin@multiventas.local' },
+      update: {},
+      create: {
+        email: 'admin@multiventas.local',
+        name: 'Admin Multiventas',
+        passwordHash: adminPassword,
+        roles: [UserRole.ADMIN, UserRole.BUYER],
+      },
+    });
 
     const categories = await Promise.all([
       ['tecnologia', 'Tecnología'],
