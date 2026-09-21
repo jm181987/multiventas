@@ -2,6 +2,8 @@ import { Controller, Get, Module, ServiceUnavailableException } from '@nestjs/co
 import { DbService } from '../common/db.service';
 import { SkipTenantContext } from '../common/decorators';
 
+const REQUIRED_MIGRATION = '202609220004_backfill_existing_public_catalog';
+
 @SkipTenantContext()
 @Controller('health')
 class HealthController {
@@ -24,10 +26,25 @@ class HealthController {
       throw new ServiceUnavailableException('Base de datos conectada pero esquema/migraciones no están listos');
     }
 
+    const [migration] = await this.db.client.$queryRaw<Array<{ applied: boolean }>>`
+      SELECT EXISTS (
+        SELECT 1
+        FROM "_prisma_migrations"
+        WHERE "migration_name" = ${REQUIRED_MIGRATION}
+          AND "finished_at" IS NOT NULL
+          AND "rolled_back_at" IS NULL
+      ) AS applied
+    `;
+
+    if (!migration?.applied) {
+      throw new ServiceUnavailableException('Esperando actualización del catálogo existente');
+    }
+
     return {
       status: 'ok',
       database: 'ok',
       schema: 'ok',
+      migration: REQUIRED_MIGRATION,
       timestamp: new Date().toISOString(),
     };
   }
