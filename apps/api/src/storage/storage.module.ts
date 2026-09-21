@@ -20,9 +20,20 @@ export class StorageService {
     });
   }
 
+  private safeFilename(filename: string) {
+    return filename.replace(/[^a-zA-Z0-9._-]/g, '-');
+  }
+
   private productKey(tenantId: string, productId: string, filename: string) {
-    const safe = filename.replace(/[^a-zA-Z0-9._-]/g, '-');
-    return `products/${tenantId}/${productId}/${randomUUID()}-${safe}`;
+    return `products/${tenantId}/${productId}/${randomUUID()}-${this.safeFilename(filename)}`;
+  }
+
+  private storeAssetKey(tenantId: string, storeId: string, kind: 'logo' | 'cover', filename: string) {
+    return `stores/${tenantId}/${storeId}/${kind}-${randomUUID()}-${this.safeFilename(filename)}`;
+  }
+
+  private userAvatarKey(userId: string, filename: string) {
+    return `users/${userId}/avatar-${randomUUID()}-${this.safeFilename(filename)}`;
   }
 
   private publicUrl(key: string) {
@@ -31,13 +42,14 @@ export class StorageService {
     return `/media/${key}`;
   }
 
-  normalizeProductImageUrl(url: string) {
+  normalizeMediaUrl(url: string) {
     if (!url || url.startsWith('/media/')) return url;
-
-    // Compatibilidad con imágenes guardadas antes de usar el proxy /media.
-    // Reconocemos únicamente la estructura de keys generada por Multiventas.
-    const match = url.match(/\/(?:multiventas\/)?(products\/[0-9a-f-]{36}\/[0-9a-f-]{36}\/[^/?#]+)(?:[?#].*)?$/i);
+    const match = url.match(/\/(?:multiventas\/)?((?:products|stores|users)\/[^?#]+)(?:[?#].*)?$/i);
     return match ? `/media/${match[1]}` : url;
+  }
+
+  normalizeProductImageUrl(url: string) {
+    return this.normalizeMediaUrl(url);
   }
 
   async createProductUploadUrl(tenantId: string, productId: string, filename: string, contentType: string) {
@@ -51,8 +63,7 @@ export class StorageService {
     return { uploadUrl, key, publicUrl: this.publicUrl(key) };
   }
 
-  async uploadProductImage(tenantId: string, productId: string, filename: string, contentType: string, body: Buffer) {
-    const key = this.productKey(tenantId, productId, filename);
+  private async upload(key: string, contentType: string, body: Buffer) {
     await this.client.send(new PutObjectCommand({
       Bucket: this.config.getOrThrow('S3_BUCKET'),
       Key: key,
@@ -60,6 +71,18 @@ export class StorageService {
       Body: body,
     }));
     return { key, publicUrl: this.publicUrl(key) };
+  }
+
+  uploadProductImage(tenantId: string, productId: string, filename: string, contentType: string, body: Buffer) {
+    return this.upload(this.productKey(tenantId, productId, filename), contentType, body);
+  }
+
+  uploadStoreAsset(tenantId: string, storeId: string, kind: 'logo' | 'cover', filename: string, contentType: string, body: Buffer) {
+    return this.upload(this.storeAssetKey(tenantId, storeId, kind, filename), contentType, body);
+  }
+
+  uploadUserAvatar(userId: string, filename: string, contentType: string, body: Buffer) {
+    return this.upload(this.userAvatarKey(userId, filename), contentType, body);
   }
 }
 

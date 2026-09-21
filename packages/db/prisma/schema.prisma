@@ -89,6 +89,7 @@ model User {
   passwordHash String       @map("password_hash")
   name         String       @db.VarChar(160)
   phone        String?      @db.VarChar(40)
+  avatarUrl    String?      @map("avatar_url")
   roles        UserRole[]   @default([BUYER])
   status       UserStatus   @default(ACTIVE)
   vendor       Vendor?

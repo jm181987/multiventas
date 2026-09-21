@@ -2,7 +2,7 @@
 
 import { FormEvent, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Mail, Phone, Save, ShieldCheck, UserCircle } from 'lucide-react';
+import { Camera, Mail, Phone, Save, ShieldCheck, Trash2, UserCircle } from 'lucide-react';
 import { authApi } from '@/lib/api';
 import { useAuthSession } from '@/components/auth-provider';
 import { Badge } from '@/components/ui/badge';
@@ -15,6 +15,7 @@ type ProfileData = {
   email: string;
   name: string;
   phone?: string | null;
+  avatarUrl?: string | null;
   roles: string[];
   status: string;
   createdAt: string;
@@ -28,8 +29,17 @@ export default function ProfilePage() {
   const [phone, setPhone] = useState('');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [uploading, setUploading] = useState(false);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
+
+  async function loadProfile() {
+    const data = await authApi<ProfileData>('/users/me');
+    setProfile(data);
+    setName(data.name ?? '');
+    setPhone(data.phone ?? '');
+    return data;
+  }
 
   useEffect(() => {
     if (sessionLoading) return;
@@ -37,18 +47,10 @@ export default function ProfilePage() {
       router.replace('/login?next=/perfil');
       return;
     }
-
     let active = true;
-    authApi<ProfileData>('/users/me')
-      .then((data) => {
-        if (!active) return;
-        setProfile(data);
-        setName(data.name ?? '');
-        setPhone(data.phone ?? '');
-      })
+    loadProfile()
       .catch((e) => active && setError(e instanceof Error ? e.message : 'No se pudo cargar el perfil'))
       .finally(() => active && setLoading(false));
-
     return () => { active = false; };
   }, [router, sessionLoading, user]);
 
@@ -62,16 +64,48 @@ export default function ProfilePage() {
         method: 'PATCH',
         body: JSON.stringify({ name: name.trim(), phone: phone.trim() || undefined }),
       });
-      const refreshed = await authApi<ProfileData>('/users/me');
-      setProfile(refreshed);
-      setName(refreshed.name ?? '');
-      setPhone(refreshed.phone ?? '');
+      await loadProfile();
       await restore();
       setMessage('Perfil actualizado correctamente.');
     } catch (e) {
       setError(e instanceof Error ? e.message : 'No se pudo actualizar el perfil');
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function uploadAvatar(file?: File) {
+    if (!file) return;
+    if (!file.type.startsWith('image/')) return setError('Selecciona una imagen válida.');
+    setUploading(true);
+    setError('');
+    setMessage('');
+    try {
+      const body = new FormData();
+      body.append('file', file);
+      await authApi('/users/me/avatar', { method: 'PATCH', body });
+      await loadProfile();
+      await restore();
+      setMessage('Foto de perfil actualizada.');
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'No se pudo subir la foto');
+    } finally {
+      setUploading(false);
+    }
+  }
+
+  async function removeAvatar() {
+    setUploading(true);
+    setError('');
+    try {
+      await authApi('/users/me/avatar', { method: 'DELETE' });
+      await loadProfile();
+      await restore();
+      setMessage('Foto de perfil eliminada.');
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'No se pudo eliminar la foto');
+    } finally {
+      setUploading(false);
     }
   }
 
@@ -85,10 +119,10 @@ export default function ProfilePage() {
       <div className="mb-7">
         <p className="text-sm font-semibold uppercase tracking-widest text-muted-foreground">Cuenta</p>
         <h1 className="text-3xl font-black tracking-tight">Mi perfil</h1>
-        <p className="mt-1 text-muted-foreground">Tus datos personales y acceso al marketplace.</p>
+        <p className="mt-1 text-muted-foreground">Personaliza tus datos y tu foto de perfil.</p>
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-[1fr_280px]">
+      <div className="grid gap-6 lg:grid-cols-[1fr_300px]">
         <Card>
           <CardHeader><h2 className="text-xl font-bold">Datos personales</h2></CardHeader>
           <CardContent>
@@ -116,12 +150,30 @@ export default function ProfilePage() {
         </Card>
 
         <Card className="h-fit">
-          <CardHeader><div className="grid size-12 place-items-center rounded-full bg-muted"><UserCircle className="size-7" /></div></CardHeader>
+          <CardHeader><h2 className="text-lg font-bold">Foto de perfil</h2></CardHeader>
           <CardContent className="space-y-4">
-            <div><p className="font-bold">{profile.name}</p><p className="text-sm text-muted-foreground">{profile.email}</p></div>
-            <div className="flex flex-wrap gap-2">{profile.roles.map((role) => <Badge key={role}>{role}</Badge>)}</div>
-            <div className="flex items-center gap-2 text-sm text-muted-foreground"><ShieldCheck className="size-4" /> Cuenta {profile.status === 'ACTIVE' ? 'activa' : profile.status.toLowerCase()}</div>
-            <p className="text-xs text-muted-foreground">Miembro desde {new Date(profile.createdAt).toLocaleDateString('es-UY')}</p>
+            <div className="mx-auto size-32 overflow-hidden rounded-full border bg-muted">
+              {profile.avatarUrl ? (
+                <img src={profile.avatarUrl} alt={profile.name} className="h-full w-full object-cover" />
+              ) : (
+                <div className="grid h-full place-items-center"><UserCircle className="size-16 text-muted-foreground" /></div>
+              )}
+            </div>
+            <label className="flex cursor-pointer items-center justify-center gap-2 rounded-md border px-4 py-2 text-sm font-semibold hover:bg-muted">
+              <Camera className="size-4" /> {uploading ? 'Subiendo…' : 'Cambiar foto'}
+              <input type="file" accept="image/*" className="hidden" disabled={uploading} onChange={(e) => uploadAvatar(e.target.files?.[0])} />
+            </label>
+            {profile.avatarUrl && (
+              <Button type="button" variant="ghost" className="w-full text-red-600" disabled={uploading} onClick={removeAvatar}>
+                <Trash2 className="mr-2 size-4" /> Eliminar foto
+              </Button>
+            )}
+            <div className="border-t pt-4">
+              <p className="font-bold">{profile.name}</p>
+              <p className="text-sm text-muted-foreground">{profile.email}</p>
+              <div className="mt-3 flex flex-wrap gap-2">{profile.roles.map((role) => <Badge key={role}>{role}</Badge>)}</div>
+              <div className="mt-3 flex items-center gap-2 text-sm text-muted-foreground"><ShieldCheck className="size-4" /> Cuenta {profile.status === 'ACTIVE' ? 'activa' : profile.status.toLowerCase()}</div>
+            </div>
           </CardContent>
         </Card>
       </div>

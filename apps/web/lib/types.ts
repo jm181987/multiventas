@@ -2,10 +2,10 @@ export type Store = {
   id: string;
   slug: string;
   name: string;
-  description?: string;
-  logoUrl?: string;
-  coverUrl?: string;
-  primaryColor?: string;
+  description?: string | null;
+  logoUrl?: string | null;
+  coverUrl?: string | null;
+  primaryColor?: string | null;
   status?: 'DRAFT' | 'ACTIVE' | 'SUSPENDED';
 };
 

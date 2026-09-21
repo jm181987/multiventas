@@ -49,7 +49,7 @@ export function SiteHeader() {
           {!loading && user && (
             <div className="hidden items-center gap-2 md:flex">
               <Link href="/perfil" className="inline-flex h-9 items-center gap-2 rounded-md border px-3 text-sm">
-                <UserCircle className="size-4" />
+                {user.avatarUrl ? <img src={user.avatarUrl} alt="" className="size-6 rounded-full object-cover" /> : <UserCircle className="size-4" />}
                 <span className="max-w-28 truncate">{user.name ?? user.email}</span>
               </Link>
               <Button variant="ghost" size="sm" onClick={signOut} aria-label="Cerrar sesión"><LogOut className="size-4" /></Button>
