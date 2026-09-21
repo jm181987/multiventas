@@ -27,7 +27,9 @@ export class StorageService {
 
   private publicUrl(key: string) {
     const publicBase = this.config.getOrThrow<string>('S3_PUBLIC_URL').replace(/\/$/, '');
-    return `${publicBase}/${key}`;
+    const bucket = this.config.getOrThrow<string>('S3_BUCKET');
+    const bucketBase = publicBase.endsWith(`/${bucket}`) ? publicBase : `${publicBase}/${bucket}`;
+    return `${bucketBase}/${key}`;
   }
 
   async createProductUploadUrl(tenantId: string, productId: string, filename: string, contentType: string) {
