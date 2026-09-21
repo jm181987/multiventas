@@ -1,2 +1,5 @@
-import { DashboardResource } from '@/components/DashboardResource';
-export default function VendorOrdersPage() { return <DashboardResource title="Pedidos" endpoint="/vendor/orders" />; }
+import { VendorOrdersManager } from '@/components/VendorOrdersManager';
+
+export default function VendorOrdersPage() {
+  return <VendorOrdersManager />;
+}
