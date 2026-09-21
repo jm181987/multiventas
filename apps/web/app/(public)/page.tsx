@@ -7,7 +7,11 @@ import { ProductGrid } from '@/components/ProductGrid';
 export const dynamic = 'force-dynamic';
 
 export default async function HomePage() {
-  const data = await publicApi<ProductSearch>('/products?limit=8').catch(() => ({ items: [], total: 0, page: 1, limit: 8 }));
+  let catalogError = false;
+  const data = await publicApi<ProductSearch>('/products?limit=8').catch(() => {
+    catalogError = true;
+    return { items: [], total: 0, page: 1, limit: 8 };
+  });
   return (
     <main>
       <section className="hero-grid border-b">
@@ -30,6 +34,7 @@ export default async function HomePage() {
       </section>
       <section className="mx-auto max-w-7xl px-4 py-14">
         <div className="mb-7 flex items-end justify-between"><div><p className="text-sm font-semibold uppercase tracking-widest text-muted-foreground">Novedades</p><h2 className="text-3xl font-black">Productos destacados</h2></div><Link href="/productos" className="text-sm font-semibold">Ver todos →</Link></div>
+        {catalogError && <div className="mb-6 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">El catálogo no está disponible temporalmente. Intenta recargar en unos segundos.</div>}
         <ProductGrid products={data.items} />
       </section>
     </main>
