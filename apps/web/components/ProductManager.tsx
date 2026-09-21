@@ -201,7 +201,15 @@ export function ProductManager() {
       }
       if (!editingId) throw new Error('No hay producto seleccionado');
       const { storeId: _storeId, currency: _currency, ...updatePayload } = payload;
-      return authApi<VendorProduct>(`/vendor/products/${editingId}`, { method: 'PATCH', body: JSON.stringify(updatePayload) });
+      return authApi<VendorProduct>(`/vendor/products/${editingId}`, {
+        method: 'PATCH',
+        body: JSON.stringify({
+          ...updatePayload,
+          categoryId: form.categoryId || null,
+          sku: form.sku.trim() || null,
+          description: form.description.trim() || null,
+        }),
+      });
     },
     onSuccess: async (saved) => {
       await qc.invalidateQueries({ queryKey: ['vendor-products'] });
