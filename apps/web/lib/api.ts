@@ -1,7 +1,12 @@
-const API_URL = (process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001/api').replace(/\/$/, '');
+const PUBLIC_API_URL = (process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001/api').replace(/\/$/, '');
+const SERVER_API_URL = (process.env.INTERNAL_API_URL ?? PUBLIC_API_URL).replace(/\/$/, '');
+
+function apiUrl() {
+  return typeof window === 'undefined' ? SERVER_API_URL : PUBLIC_API_URL;
+}
 
 export async function publicApi<T>(path: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(`${API_URL}${path}`, {
+  const res = await fetch(`${apiUrl()}${path}`, {
     ...init,
     headers: { 'content-type': 'application/json', ...(init?.headers ?? {}) },
     cache: 'no-store',
@@ -31,7 +36,7 @@ export function hasAuth() {
 export async function authApi<T>(path: string, init?: RequestInit, retry = true): Promise<T> {
   if (typeof window === 'undefined') throw new Error('authApi solo puede ejecutarse en cliente');
   const token = localStorage.getItem('mv_access_token');
-  const res = await fetch(`${API_URL}${path}`, {
+  const res = await fetch(`${PUBLIC_API_URL}${path}`, {
     ...init,
     headers: {
       'content-type': 'application/json',
@@ -43,7 +48,7 @@ export async function authApi<T>(path: string, init?: RequestInit, retry = true)
   if (res.status === 401 && retry) {
     const refreshToken = localStorage.getItem('mv_refresh_token');
     if (refreshToken) {
-      const refresh = await fetch(`${API_URL}/auth/refresh`, {
+      const refresh = await fetch(`${PUBLIC_API_URL}/auth/refresh`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ refreshToken }),
