@@ -1,7 +1,8 @@
-import Image from 'next/image';
 import { notFound } from 'next/navigation';
 import { publicApi } from '@/lib/api';
 import { ProductGrid } from '@/components/ProductGrid';
+
+export const dynamic = 'force-dynamic';
 
 export default async function StorePage({ params }: { params: { slug: string } }) {
   const store = await publicApi<any>(`/stores/${params.slug}`).catch(() => null);

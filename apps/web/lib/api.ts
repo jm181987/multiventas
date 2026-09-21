@@ -4,7 +4,7 @@ export async function publicApi<T>(path: string, init?: RequestInit): Promise<T>
   const res = await fetch(`${API_URL}${path}`, {
     ...init,
     headers: { 'content-type': 'application/json', ...(init?.headers ?? {}) },
-    next: { revalidate: 30 },
+    cache: 'no-store',
   });
   if (!res.ok) throw new Error(`API ${res.status}: ${await res.text()}`);
   return res.json();

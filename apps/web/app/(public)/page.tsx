@@ -4,6 +4,8 @@ import { publicApi } from '@/lib/api';
 import { ProductSearch } from '@/lib/types';
 import { ProductGrid } from '@/components/ProductGrid';
 
+export const dynamic = 'force-dynamic';
+
 export default async function HomePage() {
   const data = await publicApi<ProductSearch>('/products?limit=8').catch(() => ({ items: [], total: 0, page: 1, limit: 8 }));
   return (

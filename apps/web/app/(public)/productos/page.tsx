@@ -3,6 +3,8 @@ import { ProductSearch } from '@/lib/types';
 import { ProductGrid } from '@/components/ProductGrid';
 import { FilterSidebar } from '@/components/FilterSidebar';
 
+export const dynamic = 'force-dynamic';
+
 export default async function ProductsPage({ searchParams }: { searchParams: Record<string, string | undefined> }) {
   const qs = new URLSearchParams();
   Object.entries(searchParams).forEach(([k, v]) => v && qs.set(k, v));

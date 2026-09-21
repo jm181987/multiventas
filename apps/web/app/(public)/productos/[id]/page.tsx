@@ -6,6 +6,8 @@ import { money } from '@/lib/utils';
 import { ProductCard } from '@/components/ProductCard';
 import { Badge } from '@/components/ui/badge';
 
+export const dynamic = 'force-dynamic';
+
 export default async function ProductPage({ params }: { params: { id: string } }) {
   const product = await publicApi<Product>(`/products/${params.id}`).catch(() => null);
   if (!product) notFound();
