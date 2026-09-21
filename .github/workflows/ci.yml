@@ -9,6 +9,16 @@ on:
 jobs:
   verify:
     runs-on: ubuntu-latest
+    services:
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
     env:
       DATABASE_URL: postgresql://ci:ci@localhost:5432/ci
       DIRECT_URL: postgresql://ci:ci@localhost:5432/ci
@@ -21,6 +31,7 @@ jobs:
       MP_WEBHOOK_SECRET: ci
       MP_WEBHOOK_URL: https://example.com/api/webhooks/mercadopago
       WEB_PUBLIC_URL: https://example.com
+      API_PUBLIC_URL: https://api.example.com
       NEXT_PUBLIC_API_URL: http://localhost:3001/api
       REDIS_URL: redis://localhost:6379
       S3_REGION: us-east-1
@@ -28,6 +39,7 @@ jobs:
       S3_BUCKET: ci
       S3_ACCESS_KEY: ci
       S3_SECRET_KEY: ci
+      S3_FORCE_PATH_STYLE: "true"
       S3_PUBLIC_URL: https://media.example.com
 
     steps:
@@ -53,3 +65,36 @@ jobs:
 
       - name: Build
         run: pnpm build
+
+      - name: API startup smoke test
+        shell: bash
+        run: |
+          set -euo pipefail
+          node apps/api/dist/main.js > /tmp/multiventas-api.log 2>&1 &
+          api_pid=$!
+
+          cleanup() {
+            kill "$api_pid" 2>/dev/null || true
+            wait "$api_pid" 2>/dev/null || true
+          }
+          trap cleanup EXIT
+
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent --show-error http://127.0.0.1:3001/api/health > /tmp/health.json; then
+              cat /tmp/health.json
+              cat /tmp/multiventas-api.log
+              exit 0
+            fi
+
+            if ! kill -0 "$api_pid" 2>/dev/null; then
+              echo "API process exited before becoming healthy"
+              cat /tmp/multiventas-api.log
+              exit 1
+            fi
+
+            sleep 1
+          done
+
+          echo "API did not become healthy within 30 seconds"
+          cat /tmp/multiventas-api.log
+          exit 1

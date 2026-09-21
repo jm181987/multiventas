@@ -1,6 +1,8 @@
 import { Controller, Get, Module } from '@nestjs/common';
 import { DbService } from '../common/db.service';
+import { SkipTenantContext } from '../common/decorators';
 
+@SkipTenantContext()
 @Controller('health')
 class HealthController {
   constructor(private readonly db: DbService) {}
