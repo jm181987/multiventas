@@ -6,21 +6,28 @@ export type Store = {
   logoUrl?: string;
   coverUrl?: string;
   primaryColor?: string;
+  status?: 'DRAFT' | 'ACTIVE' | 'SUSPENDED';
 };
 
-export type ProductImage = { id: string; url: string; alt?: string };
+export type ProductImage = { id: string; url: string; alt?: string; sortOrder?: number };
 
 export type Product = {
   id: string;
+  storeId?: string;
+  categoryId?: string;
+  sku?: string;
   slug: string;
   title: string;
   description?: string;
   price: string | number;
   currency: string;
   stock: number;
+  status?: 'DRAFT' | 'ACTIVE' | 'ARCHIVED';
   images: ProductImage[];
   store: Store;
   category?: { id: string; slug: string; name: string };
+  createdAt?: string;
+  updatedAt?: string;
 };
 
 export type ProductSearch = {
