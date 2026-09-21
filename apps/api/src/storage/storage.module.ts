@@ -31,6 +31,15 @@ export class StorageService {
     return `/media/${key}`;
   }
 
+  normalizeProductImageUrl(url: string) {
+    if (!url || url.startsWith('/media/')) return url;
+
+    // Compatibilidad con imágenes guardadas antes de usar el proxy /media.
+    // Reconocemos únicamente la estructura de keys generada por Multiventas.
+    const match = url.match(/\/(?:multiventas\/)?(products\/[0-9a-f-]{36}\/[0-9a-f-]{36}\/[^/?#]+)(?:[?#].*)?$/i);
+    return match ? `/media/${match[1]}` : url;
+  }
+
   async createProductUploadUrl(tenantId: string, productId: string, filename: string, contentType: string) {
     const key = this.productKey(tenantId, productId, filename);
     const command = new PutObjectCommand({
