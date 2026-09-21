@@ -1,0 +1,374 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+enum UserRole {
+  BUYER
+  VENDOR
+  ADMIN
+}
+
+enum UserStatus {
+  ACTIVE
+  SUSPENDED
+}
+
+enum VendorStatus {
+  PENDING
+  APPROVED
+  SUSPENDED
+  REJECTED
+}
+
+enum KycStatus {
+  NOT_STARTED
+  PENDING
+  VERIFIED
+  REJECTED
+}
+
+enum StoreStatus {
+  DRAFT
+  ACTIVE
+  SUSPENDED
+}
+
+enum ProductStatus {
+  DRAFT
+  ACTIVE
+  ARCHIVED
+}
+
+enum OrderStatus {
+  PENDING
+  PAID
+  SHIPPED
+  DELIVERED
+  CANCELLED
+}
+
+enum PaymentProvider {
+  MERCADO_PAGO
+  HANDY
+}
+
+enum PaymentStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  CANCELLED
+  REFUNDED
+  CHARGEBACK
+}
+
+enum OAuthProvider {
+  MERCADO_PAGO
+}
+
+enum CommissionStatus {
+  PENDING
+  CONFIRMED
+  REFUNDED
+}
+
+enum ReviewStatus {
+  PENDING
+  PUBLISHED
+  REJECTED
+}
+
+model User {
+  id           String       @id @default(uuid()) @db.Uuid
+  email        String       @unique @db.VarChar(320)
+  passwordHash String       @map("password_hash")
+  name         String       @db.VarChar(160)
+  phone        String?      @db.VarChar(40)
+  roles        UserRole[]   @default([BUYER])
+  status       UserStatus   @default(ACTIVE)
+  vendor       Vendor?
+  orders       Order[]      @relation("BuyerOrders")
+  reviews      Review[]     @relation("BuyerReviews")
+  refreshTokens RefreshToken[]
+  auditLogs    AuditLog[]   @relation("AuditActor")
+  createdAt    DateTime     @default(now()) @map("created_at")
+  updatedAt    DateTime     @updatedAt @map("updated_at")
+  deletedAt    DateTime?    @map("deleted_at")
+
+  @@index([status])
+  @@map("users")
+}
+
+model RefreshToken {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  tokenHash String   @unique @map("token_hash")
+  expiresAt DateTime @map("expires_at")
+  revokedAt DateTime? @map("revoked_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, expiresAt])
+  @@map("refresh_tokens")
+}
+
+model Vendor {
+  id           String       @id @default(uuid()) @db.Uuid
+  userId       String       @unique @map("user_id") @db.Uuid
+  businessName String       @map("business_name") @db.VarChar(180)
+  documentType String?      @map("document_type") @db.VarChar(30)
+  documentNumber String?    @map("document_number") @db.VarChar(80)
+  status       VendorStatus @default(PENDING)
+  kycStatus    KycStatus    @default(NOT_STARTED) @map("kyc_status")
+  kycData      Json?        @map("kyc_data")
+  approvedAt   DateTime?    @map("approved_at")
+  createdAt    DateTime     @default(now()) @map("created_at")
+  updatedAt    DateTime     @updatedAt @map("updated_at")
+  deletedAt    DateTime?    @map("deleted_at")
+  user         User         @relation(fields: [userId], references: [id], onDelete: Restrict)
+  stores       Store[]
+  products     Product[]
+  orders       Order[]
+  oauthTokens  OAuthToken[]
+  commissions  Commission[]
+  auditLogs    AuditLog[]
+
+  @@index([status, kycStatus])
+  @@map("vendors")
+}
+
+model Store {
+  id           String      @id @default(uuid()) @db.Uuid
+  tenantId     String      @map("tenant_id") @db.Uuid
+  slug         String      @unique @db.VarChar(120)
+  name         String      @db.VarChar(160)
+  description  String?
+  logoUrl      String?     @map("logo_url")
+  coverUrl     String?     @map("cover_url")
+  primaryColor String?     @map("primary_color") @db.VarChar(20)
+  status       StoreStatus @default(DRAFT)
+  createdAt    DateTime    @default(now()) @map("created_at")
+  updatedAt    DateTime    @updatedAt @map("updated_at")
+  deletedAt    DateTime?   @map("deleted_at")
+  vendor       Vendor      @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  products     Product[]
+  orders       Order[]
+  reviews      Review[]
+
+  @@index([tenantId, status])
+  @@map("stores")
+}
+
+model Category {
+  id        String     @id @default(uuid()) @db.Uuid
+  parentId  String?    @map("parent_id") @db.Uuid
+  slug      String     @unique @db.VarChar(120)
+  name      String     @db.VarChar(120)
+  sortOrder Int        @default(0) @map("sort_order")
+  isActive  Boolean    @default(true) @map("is_active")
+  createdAt DateTime   @default(now()) @map("created_at")
+  updatedAt DateTime   @updatedAt @map("updated_at")
+  parent    Category?  @relation("CategoryTree", fields: [parentId], references: [id], onDelete: SetNull)
+  children  Category[] @relation("CategoryTree")
+  products  Product[]
+
+  @@index([parentId, isActive, sortOrder])
+  @@map("categories")
+}
+
+model Product {
+  id          String        @id @default(uuid()) @db.Uuid
+  tenantId    String        @map("tenant_id") @db.Uuid
+  storeId     String        @map("store_id") @db.Uuid
+  categoryId  String?       @map("category_id") @db.Uuid
+  sku         String?       @db.VarChar(80)
+  slug        String        @db.VarChar(160)
+  title       String        @db.VarChar(220)
+  description String?
+  price       Decimal       @db.Decimal(12, 2)
+  currency    String        @default("UYU") @db.VarChar(3)
+  stock       Int           @default(0)
+  status      ProductStatus @default(DRAFT)
+  createdAt   DateTime      @default(now()) @map("created_at")
+  updatedAt   DateTime      @updatedAt @map("updated_at")
+  deletedAt   DateTime?     @map("deleted_at")
+  vendor      Vendor        @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  store       Store         @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  category    Category?     @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  images      ProductImage[]
+  orderItems  OrderItem[]
+  reviews     Review[]
+
+  @@unique([storeId, slug])
+  @@unique([storeId, sku])
+  @@index([tenantId, status, deletedAt])
+  @@index([categoryId, status])
+  @@index([title])
+  @@map("products")
+}
+
+model ProductImage {
+  id        String   @id @default(uuid()) @db.Uuid
+  tenantId  String   @map("tenant_id") @db.Uuid
+  productId String   @map("product_id") @db.Uuid
+  url       String
+  alt       String?  @db.VarChar(220)
+  sortOrder Int      @default(0) @map("sort_order")
+  createdAt DateTime @default(now()) @map("created_at")
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, productId, sortOrder])
+  @@map("product_images")
+}
+
+model Order {
+  id             String      @id @default(uuid()) @db.Uuid
+  tenantId       String      @map("tenant_id") @db.Uuid
+  storeId        String      @map("store_id") @db.Uuid
+  buyerId        String      @map("buyer_id") @db.Uuid
+  status         OrderStatus @default(PENDING)
+  currency       String      @default("UYU") @db.VarChar(3)
+  subtotal       Decimal     @db.Decimal(12, 2)
+  shippingAmount Decimal     @default(0) @map("shipping_amount") @db.Decimal(12, 2)
+  discountAmount Decimal     @default(0) @map("discount_amount") @db.Decimal(12, 2)
+  total          Decimal     @db.Decimal(12, 2)
+  shippingAddress Json?      @map("shipping_address")
+  notes          String?
+  createdAt      DateTime    @default(now()) @map("created_at")
+  updatedAt      DateTime    @updatedAt @map("updated_at")
+  vendor         Vendor      @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  store          Store       @relation(fields: [storeId], references: [id], onDelete: Restrict)
+  buyer          User        @relation("BuyerOrders", fields: [buyerId], references: [id], onDelete: Restrict)
+  items          OrderItem[]
+  payment        Payment?
+  commission     Commission?
+
+  @@index([tenantId, status, createdAt])
+  @@index([buyerId, createdAt])
+  @@map("orders")
+}
+
+model OrderItem {
+  id        String   @id @default(uuid()) @db.Uuid
+  tenantId  String   @map("tenant_id") @db.Uuid
+  orderId   String   @map("order_id") @db.Uuid
+  productId String?  @map("product_id") @db.Uuid
+  title     String   @db.VarChar(220)
+  sku       String?  @db.VarChar(80)
+  quantity  Int
+  unitPrice Decimal  @map("unit_price") @db.Decimal(12, 2)
+  total     Decimal  @db.Decimal(12, 2)
+  createdAt DateTime @default(now()) @map("created_at")
+  order     Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product   Product? @relation(fields: [productId], references: [id], onDelete: SetNull)
+  review    Review?
+
+  @@index([tenantId, orderId])
+  @@index([productId])
+  @@map("order_items")
+}
+
+model Payment {
+  id             String          @id @default(uuid()) @db.Uuid
+  tenantId       String          @map("tenant_id") @db.Uuid
+  orderId        String          @unique @map("order_id") @db.Uuid
+  provider       PaymentProvider
+  status         PaymentStatus   @default(PENDING)
+  amount         Decimal         @db.Decimal(12, 2)
+  feeAmount      Decimal         @default(0) @map("fee_amount") @db.Decimal(12, 2)
+  mpPaymentId    String?         @unique @map("mp_payment_id") @db.VarChar(120)
+  mpPreferenceId String?         @unique @map("mp_preference_id") @db.VarChar(120)
+  externalReference String?      @map("external_reference") @db.VarChar(180)
+  raw            Json?
+  paidAt         DateTime?       @map("paid_at")
+  createdAt      DateTime        @default(now()) @map("created_at")
+  updatedAt      DateTime        @updatedAt @map("updated_at")
+  order          Order           @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  commission     Commission?
+
+  @@index([tenantId, status, createdAt])
+  @@map("payments")
+}
+
+model OAuthToken {
+  id           String        @id @default(uuid()) @db.Uuid
+  tenantId     String        @map("tenant_id") @db.Uuid
+  provider     OAuthProvider @default(MERCADO_PAGO)
+  accessToken  String        @map("access_token")
+  refreshToken String?       @map("refresh_token")
+  scope        String?
+  expiresAt    DateTime      @map("expires_at")
+  providerUserId String?     @map("provider_user_id") @db.VarChar(120)
+  createdAt    DateTime      @default(now()) @map("created_at")
+  updatedAt    DateTime      @updatedAt @map("updated_at")
+  vendor       Vendor        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, provider])
+  @@index([expiresAt])
+  @@map("oauth_tokens")
+}
+
+model Commission {
+  id         String           @id @default(uuid()) @db.Uuid
+  tenantId   String           @map("tenant_id") @db.Uuid
+  orderId    String           @unique @map("order_id") @db.Uuid
+  paymentId  String?          @unique @map("payment_id") @db.Uuid
+  rate       Decimal          @default(0.08) @db.Decimal(5, 4)
+  baseAmount Decimal          @map("base_amount") @db.Decimal(12, 2)
+  amount     Decimal          @db.Decimal(12, 2)
+  status     CommissionStatus @default(PENDING)
+  createdAt  DateTime         @default(now()) @map("created_at")
+  updatedAt  DateTime         @updatedAt @map("updated_at")
+  vendor     Vendor           @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  order      Order            @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  payment    Payment?         @relation(fields: [paymentId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId, status, createdAt])
+  @@map("commissions")
+}
+
+model Review {
+  id          String       @id @default(uuid()) @db.Uuid
+  tenantId    String       @map("tenant_id") @db.Uuid
+  storeId     String       @map("store_id") @db.Uuid
+  productId   String       @map("product_id") @db.Uuid
+  buyerId     String       @map("buyer_id") @db.Uuid
+  orderItemId String?      @unique @map("order_item_id") @db.Uuid
+  rating      Int
+  comment     String?
+  status      ReviewStatus @default(PENDING)
+  createdAt   DateTime     @default(now()) @map("created_at")
+  updatedAt   DateTime     @updatedAt @map("updated_at")
+  store       Store        @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  product     Product      @relation(fields: [productId], references: [id], onDelete: Cascade)
+  buyer       User         @relation("BuyerReviews", fields: [buyerId], references: [id], onDelete: Restrict)
+  orderItem   OrderItem?   @relation(fields: [orderItemId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId, productId, status])
+  @@index([storeId, status])
+  @@map("reviews")
+}
+
+model AuditLog {
+  id          String   @id @default(uuid()) @db.Uuid
+  tenantId    String?  @map("tenant_id") @db.Uuid
+  actorUserId String?  @map("actor_user_id") @db.Uuid
+  action      String   @db.VarChar(120)
+  entity      String   @db.VarChar(120)
+  entityId    String?  @map("entity_id") @db.VarChar(120)
+  ip          String?  @db.VarChar(64)
+  userAgent   String?  @map("user_agent")
+  metadata    Json?
+  createdAt   DateTime @default(now()) @map("created_at")
+  vendor      Vendor?  @relation(fields: [tenantId], references: [id], onDelete: SetNull)
+  actor       User?    @relation("AuditActor", fields: [actorUserId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId, createdAt])
+  @@index([actorUserId, createdAt])
+  @@map("audit_logs")
+}
