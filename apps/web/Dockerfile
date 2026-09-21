@@ -3,11 +3,13 @@ RUN corepack enable
 WORKDIR /app
 
 FROM base AS deps
+ENV NODE_ENV=development
 COPY package.json pnpm-workspace.yaml ./
 COPY apps/web/package.json apps/web/package.json
-RUN pnpm install --filter @multiventas/web... --frozen-lockfile=false
+RUN pnpm install --filter @multiventas/web... --prod=false --shamefully-hoist --frozen-lockfile=false
 
 FROM deps AS build
+ENV NODE_ENV=production
 COPY tsconfig.base.json ./
 COPY apps/web apps/web
 ARG NEXT_PUBLIC_API_URL

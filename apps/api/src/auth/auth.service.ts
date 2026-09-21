@@ -2,7 +2,7 @@ import { BadRequestException, Injectable, UnauthorizedException } from '@nestjs/
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import bcrypt from 'bcryptjs';
-import { createHash } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { DbService } from '../common/db.service';
 import { LoginDto, RefreshDto, RegisterBuyerDto, RegisterVendorDto } from './dto';
 import { StoreStatus, UserRole, UserStatus } from '@multiventas/db';
@@ -123,7 +123,7 @@ export class AuthService {
       secret: this.config.getOrThrow('JWT_ACCESS_SECRET'),
       expiresIn: (this.config.get('JWT_ACCESS_TTL') ?? '15m') as any,
     });
-    const refreshToken = await this.jwt.signAsync({ sub: user.id }, {
+    const refreshToken = await this.jwt.signAsync({ sub: user.id, jti: randomUUID() }, {
       secret: this.config.getOrThrow('JWT_REFRESH_SECRET'),
       expiresIn: (this.config.get('JWT_REFRESH_TTL') ?? '30d') as any,
     });
