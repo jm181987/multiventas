@@ -12,7 +12,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { useCartUi } from '@/store/cart';
 
-export function ProductCard({ product }: { product: Product }) {
+export function ProductCard({ product, accentColor }: { product: Product; accentColor?: string }) {
   const qc = useQueryClient();
   const open = useCartUi((s) => s.setOpen);
   const image = product.images?.[0]?.url ?? 'https://placehold.co/800x800?text=Multiventas';
@@ -33,14 +33,15 @@ export function ProductCard({ product }: { product: Product }) {
       </Link>
       <CardContent className="space-y-3 p-4">
         <div className="flex items-center justify-between gap-2">
-          <Badge>{product.store?.name}</Badge>
+          <Badge className={accentColor ? 'border border-transparent text-white' : undefined} style={accentColor ? { backgroundColor: accentColor } : undefined}>{product.store?.name}</Badge>
           <span className="text-xs text-muted-foreground">{product.stock} disponibles</span>
         </div>
         <Link href={`/productos/${product.id}`} className="line-clamp-2 min-h-12 font-semibold">{product.title}</Link>
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between gap-3">
           <span className="text-xl font-black">{money(product.price, product.currency)}</span>
           <Button
             size="sm"
+            style={accentColor ? { backgroundColor: accentColor, color: '#fff' } : undefined}
             onClick={() => {
               if (!hasAuth()) { location.href = '/login'; return; }
               add.mutate();
