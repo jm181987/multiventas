@@ -185,20 +185,3 @@ jobs:
           docker logs multiventas-web-smoke
           exit 1
 
-
-  domain-diagnostics:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Probe production domain
-        shell: bash
-        run: |
-          echo "=== DNS www ==="
-          getent ahostsv4 www.sevende.knjpro.site || true
-          echo "=== DNS bare ==="
-          getent ahostsv4 sevende.knjpro.site || true
-          echo "=== HTTPS www ==="
-          curl -vkI --max-time 15 https://www.sevende.knjpro.site/ || true
-          echo "=== HTTPS health ==="
-          curl -vk --max-time 15 https://www.sevende.knjpro.site/api/health/ready || true
-          echo "=== HTTPS bare ==="
-          curl -vkI --max-time 15 https://sevende.knjpro.site/ || true
