@@ -87,6 +87,51 @@ jobs:
       - name: Seed integration database
         run: pnpm db:seed
 
+      - name: Public RLS store access
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat >/tmp/rls-store-access.sql <<'SQL'
+          DO $
+          BEGIN
+            IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'rls_probe') THEN
+              CREATE ROLE rls_probe NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOBYPASSRLS;
+            END IF;
+          END
+          $;
+
+          GRANT USAGE ON SCHEMA public TO rls_probe;
+          GRANT SELECT ON vendors, stores, products, product_images TO rls_probe;
+
+          BEGIN;
+          SET LOCAL ROLE rls_probe;
+          SELECT set_config('app.role', 'public', true);
+          SELECT set_config('app.public', 'true', true);
+          SELECT set_config('app.tenant_id', '', true);
+          SELECT set_config('app.user_id', '', true);
+
+          DO $
+          DECLARE visible_count integer;
+          BEGIN
+            SELECT count(*) INTO visible_count
+            FROM stores s
+            JOIN vendors v ON v.id = s.tenant_id
+            WHERE s.slug = 'tienda-demo-1'
+              AND s.status = 'ACTIVE'
+              AND s.deleted_at IS NULL
+              AND v.status = 'APPROVED'
+              AND v.deleted_at IS NULL;
+
+            IF visible_count <> 1 THEN
+              RAISE EXCEPTION 'RLS public store access failed: expected 1, got %', visible_count;
+            END IF;
+          END
+          $;
+          ROLLBACK;
+          SQL
+
+          docker run --rm --network host             -e PGPASSWORD=ci             -v /tmp/rls-store-access.sql:/tmp/rls-store-access.sql:ro             postgres:16-alpine             psql -h 127.0.0.1 -U ci -d ci -v ON_ERROR_STOP=1 -f /tmp/rls-store-access.sql
+
       - name: Functional API integration
         run: bash scripts/ci-functional-smoke.sh
 
