@@ -4,6 +4,7 @@ import { publicApi } from '@/lib/api';
 import { ProductSearch, StoreSearch } from '@/lib/types';
 import { ProductGrid } from '@/components/ProductGrid';
 import { StoreCard } from '@/components/StoreCard';
+import { HowItWorksCarousel } from '@/components/HowItWorksCarousel';
 
 export const dynamic = 'force-dynamic';
 
@@ -38,6 +39,8 @@ export default async function HomePage() {
           </div>
         </div>
       </section>
+
+      <HowItWorksCarousel />
 
       {!!stores.items.length && (
         <section className="border-b bg-muted/20">
