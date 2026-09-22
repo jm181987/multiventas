@@ -81,6 +81,14 @@ buyer_refresh=$(echo "$buyer" | jq -r '.refreshToken // empty')
 session=$(request GET /auth/session "$buyer_access") || fail "buyer session"
 echo "$session" | jq -e '.email == "ci-buyer@multiventas.test"' >/dev/null || fail "buyer session invalid"
 
+raw_card_status=$(curl --silent --show-error -o /tmp/raw-card-rejected.json -w '%{http_code}' \
+  -X POST "$BASE_URL/orders/checkout" \
+  -H "authorization: Bearer $buyer_access" \
+  -H 'content-type: application/json' \
+  --data '{"cardNumber":"4111111111111111","securityCode":"123"}') || fail "raw card rejection request"
+[ "$raw_card_status" = "400" ] || fail "raw card fields were not rejected"
+jq -e '.message | tostring | contains("cardNumber")' /tmp/raw-card-rejected.json >/dev/null || fail "raw card rejection reason missing"
+
 request PATCH /users/me "$buyer_access" '{"name":"CI Buyer Updated","phone":"+59899111222"}' >/tmp/profile-update.json || fail "profile update"
 profile=$(request GET /users/me "$buyer_access") || fail "profile get"
 echo "$profile" | jq -e '.name == "CI Buyer Updated" and .phone == "+59899111222" and (.avatarUrl == null)' >/dev/null || fail "profile update not persisted"
@@ -106,6 +114,17 @@ vendor_body=$(jq -cn '{email:"ci-vendor@multiventas.test",password:"TestPass123!
 vendor=$(request POST /auth/register/vendor "" "$vendor_body") || fail "vendor registration"
 vendor_access=$(echo "$vendor" | jq -r '.accessToken // empty')
 [ -n "$vendor_access" ] || fail "vendor token missing"
+
+mp_status=$(request GET /payments/mercadopago/status "$vendor_access") || fail "Mercado Pago status"
+echo "$mp_status" | jq -e '.connected == false' >/dev/null || fail "new vendor should not have Mercado Pago connected"
+
+mp_connect=$(request GET /payments/mercadopago/connect "$vendor_access") || fail "Mercado Pago connect URL"
+mp_url=$(echo "$mp_connect" | jq -r '.authorizationUrl // empty')
+[ -n "$mp_url" ] || fail "Mercado Pago authorization URL missing"
+echo "$mp_url" | grep -q '^https://auth\.mercadopago\.com\.uy/authorization?' || fail "Mercado Pago authorization host invalid"
+echo "$mp_url" | grep -q 'client_id=ci' || fail "Mercado Pago client_id missing"
+echo "$mp_url" | grep -q 'platform_id=mp' || fail "Mercado Pago platform_id missing"
+if echo "$mp_url" | grep -q 'scope='; then fail "Mercado Pago OAuth URL contains unsupported explicit scope"; fi
 
 vendor_me=$(request GET /vendors/me "$vendor_access") || fail "vendor profile"
 vendor_id=$(echo "$vendor_me" | jq -r '.id // empty')

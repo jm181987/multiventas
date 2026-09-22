@@ -11,6 +11,8 @@ type OAuthResponse = {
   expires_in: number;
   scope?: string;
   user_id?: number | string;
+  public_key?: string;
+  live_mode?: boolean;
 };
 
 export type PreferenceResponse = {
@@ -31,13 +33,16 @@ export class MercadoPagoService {
   async getAuthorizationUrl(vendorId: string): Promise<string> {
     const marketplace = await this.getRuntimeMarketplaceConfig();
     const state = this.signState(vendorId);
+    const redirectUri = this.config.getOrThrow<string>('MP_REDIRECT_URI').trim();
+    if (!/^https:\/\//i.test(redirectUri) && !redirectUri.startsWith('http://localhost')) {
+      throw new BadRequestException('MP_REDIRECT_URI debe ser una URL HTTPS estática');
+    }
     const params = new URLSearchParams({
       client_id: marketplace.clientId,
       response_type: 'code',
       platform_id: 'mp',
-      redirect_uri: this.config.getOrThrow('MP_REDIRECT_URI'),
+      redirect_uri: redirectUri,
       state,
-      scope: 'offline_access',
     });
     return `https://auth.mercadopago.com.uy/authorization?${params.toString()}`;
   }
@@ -104,11 +109,13 @@ export class MercadoPagoService {
     return payload.vendorId;
   }
 
-  async handleOAuthCallback(code: string, vendorId: string): Promise<void> {
+  async handleOAuthCallback(code: string, state: string, vendorId: string): Promise<void> {
+    if (!code) throw new BadRequestException('Mercado Pago no devolvió authorization code');
     const token = await this.oauthTokenRequest({
       grant_type: 'authorization_code',
       code,
       redirect_uri: this.config.getOrThrow('MP_REDIRECT_URI'),
+      state,
     });
     await this.db.client.oAuthToken.upsert({
       where: { tenantId_provider: { tenantId: vendorId, provider: OAuthProvider.MERCADO_PAGO } },
@@ -129,6 +136,35 @@ export class MercadoPagoService {
         providerUserId: token.user_id ? String(token.user_id) : undefined,
       },
     });
+  }
+
+  async getVendorConnectionStatus(vendorId: string) {
+    const token = await this.db.client.oAuthToken.findUnique({
+      where: { tenantId_provider: { tenantId: vendorId, provider: OAuthProvider.MERCADO_PAGO } },
+      select: {
+        expiresAt: true,
+        scope: true,
+        providerUserId: true,
+        updatedAt: true,
+      },
+    });
+
+    return {
+      connected: Boolean(token),
+      expiresAt: token?.expiresAt ?? null,
+      scope: token?.scope ?? null,
+      providerUserId: token?.providerUserId ?? null,
+      updatedAt: token?.updatedAt ?? null,
+      reconnectRequired: token ? token.expiresAt.getTime() <= Date.now() : false,
+      redirectUri: this.config.get('MP_REDIRECT_URI') ?? null,
+    };
+  }
+
+  async disconnectVendor(vendorId: string) {
+    await this.db.client.oAuthToken.deleteMany({
+      where: { tenantId: vendorId, provider: OAuthProvider.MERCADO_PAGO },
+    });
+    return { disconnected: true };
   }
 
   async refreshTokenIfNeeded(vendorId: string, force = false): Promise<void> {
@@ -156,7 +192,7 @@ export class MercadoPagoService {
     });
   }
 
-  async createPreference(orderId: string): Promise<PreferenceResponse & { marketplaceFee: number }> {
+  async createPreference(orderId: string, deviceId?: string): Promise<PreferenceResponse & { marketplaceFee: number }> {
     const order = await this.db.client.order.findUnique({
       where: { id: orderId },
       include: { items: true, vendor: true, payment: true },
@@ -179,6 +215,7 @@ export class MercadoPagoService {
       accessToken,
       {
         method: 'POST',
+        headers: deviceId ? { 'X-meli-session-id': deviceId } : undefined,
         body: JSON.stringify({
           items: order.items.map((item) => ({
             id: item.productId ?? item.id,
@@ -353,12 +390,26 @@ export class MercadoPagoService {
       client_secret: marketplace.clientSecret,
       ...data,
     });
+
     const response = await fetch(`${this.api}/oauth/token`, {
       method: 'POST',
-      headers: { accept: 'application/json', 'content-type': 'application/x-www-form-urlencoded' },
+      headers: {
+        Accept: 'application/json',
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
       body,
     });
-    if (!response.ok) throw new BadGatewayException(`Mercado Pago OAuth: ${response.status} ${await response.text()}`);
+
+    if (!response.ok) {
+      const detail = await response.text();
+      console.error('Mercado Pago OAuth error', response.status, detail);
+      throw new BadGatewayException(
+        response.status === 400
+          ? 'Mercado Pago rechazó OAuth. Verifica Client ID, Client Secret y que MP_REDIRECT_URI coincida exactamente con la Redirect URL configurada.'
+          : `Mercado Pago OAuth no disponible (HTTP ${response.status})`,
+      );
+    }
+
     return response.json() as Promise<OAuthResponse>;
   }
 
@@ -366,13 +417,17 @@ export class MercadoPagoService {
     const response = await fetch(`${this.api}${path}`, {
       ...init,
       headers: {
-        accept: 'application/json',
-        'content-type': 'application/json',
+        Accept: 'application/json',
+        'Content-Type': 'application/json',
         Authorization: `Bearer ${accessToken}`,
         ...(init.headers ?? {}),
       },
     });
-    if (!response.ok) throw new BadGatewayException(`Mercado Pago API: ${response.status} ${await response.text()}`);
+    if (!response.ok) {
+      const detail = await response.text();
+      console.error('Mercado Pago API error', path, response.status, detail);
+      throw new BadGatewayException(`Mercado Pago rechazó la operación (HTTP ${response.status})`);
+    }
     return response.json() as Promise<T>;
   }
 
