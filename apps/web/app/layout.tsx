@@ -4,8 +4,20 @@ import { Providers } from '@/components/providers';
 import { SiteHeader } from '@/components/site-header';
 
 export const metadata: Metadata = {
-  title: 'Multiventas',
+  metadataBase: new URL('https://www.sevende.knjpro.site'),
+  title: {
+    default: 'Se Vende',
+    template: '%s | Se Vende',
+  },
   description: 'Marketplace multi-vendedor para Uruguay y Latinoamérica',
+  alternates: { canonical: '/' },
+  openGraph: {
+    title: 'Se Vende',
+    description: 'Marketplace multi-vendedor para Uruguay y Latinoamérica',
+    url: 'https://www.sevende.knjpro.site',
+    siteName: 'Se Vende',
+    type: 'website',
+  },
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
