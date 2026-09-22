@@ -160,7 +160,7 @@ jobs:
           set -euo pipefail
           docker build             --build-arg NEXT_PUBLIC_API_URL=http://127.0.0.1:3001/api             -f apps/web/Dockerfile             -t multiventas-web-smoke .
 
-          docker run -d --name multiventas-web-smoke             -p 8080:80             -e NODE_ENV=production             -e PORT=3000             -e HOSTNAME=0.0.0.0             -e NEXT_PUBLIC_API_URL=http://127.0.0.1:3001/api             multiventas-web-smoke
+          docker run -d --name multiventas-web-smoke             -p 8080:80             -e NODE_ENV=production             -e PORT=80             -e HOSTNAME=0.0.0.0             -e NEXT_PUBLIC_API_URL=http://127.0.0.1:3001/api             multiventas-web-smoke
 
           cleanup_web() {
             docker logs multiventas-web-smoke || true
