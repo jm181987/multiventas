@@ -1,8 +1,9 @@
 'use client';
 
+import Link from 'next/link';
 import { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { CheckCircle2, Clock3, PackageCheck, Search, Truck, XCircle } from 'lucide-react';
+import { CheckCircle2, Clock3, ExternalLink, PackageCheck, Search, Store, Truck, XCircle } from 'lucide-react';
 import { authApi } from '@/lib/api';
 import { money } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
@@ -24,10 +25,18 @@ type VendorOrder = {
   notes?: string | null;
   createdAt: string;
   buyer: { id: string; name: string; email: string; phone?: string | null };
-  store: { id: string; slug: string; name: string };
+  store: {
+    id: string;
+    slug: string;
+    name: string;
+    logoUrl?: string | null;
+    coverUrl?: string | null;
+    primaryColor?: string | null;
+  };
   payment?: { status: string; provider: string; paidAt?: string | null } | null;
   items: Array<{
     id: string;
+    productId?: string | null;
     title: string;
     sku?: string | null;
     quantity: number;
@@ -74,6 +83,7 @@ export function VendorOrdersManager() {
   const qc = useQueryClient();
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState<'ALL' | OrderStatus>('ALL');
+  const [storeFilter, setStoreFilter] = useState('ALL');
   const [expanded, setExpanded] = useState<string | null>(null);
 
   const query = useQuery({
@@ -88,6 +98,12 @@ export function VendorOrdersManager() {
   });
 
   const orders = query.data ?? [];
+  const stores = useMemo(() => {
+    const map = new Map<string, VendorOrder['store']>();
+    for (const order of orders) map.set(order.store.id, order.store);
+    return Array.from(map.values());
+  }, [orders]);
+
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     return orders.filter((order) => {
@@ -97,9 +113,11 @@ export function VendorOrdersManager() {
         || order.buyer.email.toLowerCase().includes(q)
         || order.store.name.toLowerCase().includes(q)
         || order.items.some((item) => item.title.toLowerCase().includes(q));
-      return matchesText && (filter === 'ALL' || order.status === filter);
+      const matchesStatus = filter === 'ALL' || order.status === filter;
+      const matchesStore = storeFilter === 'ALL' || order.store.id === storeFilter;
+      return matchesText && matchesStatus && matchesStore;
     });
-  }, [filter, orders, search]);
+  }, [filter, orders, search, storeFilter]);
 
   const counters = useMemo(() => ({
     pending: orders.filter((o) => o.status === 'PENDING').length,
@@ -113,7 +131,7 @@ export function VendorOrdersManager() {
       <div>
         <p className="text-sm font-semibold uppercase tracking-widest text-muted-foreground">Ventas</p>
         <h1 className="text-3xl font-black tracking-tight">Pedidos</h1>
-        <p className="mt-1 text-muted-foreground">Gestiona cada venta desde el pago hasta la entrega.</p>
+        <p className="mt-1 text-muted-foreground">Gestiona las ventas de todas tus tiendas y sigue cada pedido hasta la entrega.</p>
       </div>
 
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
@@ -134,8 +152,8 @@ export function VendorOrdersManager() {
 
       <Card>
         <CardHeader className="border-b">
-          <div className="flex flex-col gap-3 md:flex-row">
-            <div className="relative flex-1">
+          <div className="grid gap-3 md:grid-cols-[1fr_180px_200px]">
+            <div className="relative">
               <Search className="absolute left-3 top-3 size-4 text-muted-foreground" />
               <Input className="pl-9" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Buscar cliente, pedido, tienda o producto…" />
             </div>
@@ -146,6 +164,10 @@ export function VendorOrdersManager() {
               <option value="SHIPPED">Enviados</option>
               <option value="DELIVERED">Entregados</option>
               <option value="CANCELLED">Cancelados</option>
+            </select>
+            <select className="h-10 rounded-md border bg-background px-3 text-sm" value={storeFilter} onChange={(e) => setStoreFilter(e.target.value)}>
+              <option value="ALL">Todas las tiendas</option>
+              {stores.map((store) => <option key={store.id} value={store.id}>{store.name}</option>)}
             </select>
           </div>
         </CardHeader>
@@ -163,8 +185,11 @@ export function VendorOrdersManager() {
                 const action = nextAction(order);
                 const Icon = action?.icon;
                 const isOpen = expanded === order.id;
+                const accent = order.store.primaryColor || '#18181b';
+
                 return (
-                  <div key={order.id} className="p-4 sm:p-5">
+                  <div key={order.id} className="relative p-4 sm:p-5">
+                    <div className="absolute inset-y-0 left-0 w-1" style={{ backgroundColor: accent }} />
                     <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
                       <button type="button" className="min-w-0 text-left" onClick={() => setExpanded(isOpen ? null : order.id)}>
                         <div className="flex flex-wrap items-center gap-2">
@@ -172,11 +197,21 @@ export function VendorOrdersManager() {
                           <Badge className={statusClass(order.status)}>{labels[order.status]}</Badge>
                           <span className="text-xs text-muted-foreground">{new Date(order.createdAt).toLocaleString('es-UY')}</span>
                         </div>
-                        <p className="mt-1 font-semibold">{order.buyer.name} · {order.store.name}</p>
-                        <p className="text-sm text-muted-foreground">{order.items.length} artículo{order.items.length === 1 ? '' : 's'} · {money(Number(order.total), order.currency)}</p>
+                        <div className="mt-2 flex items-center gap-2">
+                          <div className="grid size-9 shrink-0 place-items-center overflow-hidden rounded-lg border bg-muted">
+                            {order.store.logoUrl ? <img src={order.store.logoUrl} alt="" className="h-full w-full object-cover" /> : <Store className="size-4" />}
+                          </div>
+                          <div>
+                            <p className="font-semibold">{order.buyer.name}</p>
+                            <p className="text-sm text-muted-foreground">{order.store.name} · {order.items.length} artículo{order.items.length === 1 ? '' : 's'} · {money(Number(order.total), order.currency)}</p>
+                          </div>
+                        </div>
                       </button>
 
                       <div className="flex flex-wrap gap-2">
+                        <Link href={`/tienda/${order.store.slug}`} target="_blank">
+                          <Button variant="outline" size="sm"><ExternalLink className="mr-1 size-4" /> Ver tienda</Button>
+                        </Link>
                         <Button variant="outline" size="sm" onClick={() => setExpanded(isOpen ? null : order.id)}>{isOpen ? 'Ocultar' : 'Ver detalle'}</Button>
                         {action && (
                           <Button
@@ -201,7 +236,12 @@ export function VendorOrdersManager() {
                           <h3 className="font-bold">Productos</h3>
                           {order.items.map((item) => (
                             <div key={item.id} className="flex items-start justify-between gap-4 rounded-lg bg-white p-3">
-                              <div><p className="font-medium">{item.title}</p><p className="text-xs text-muted-foreground">{item.sku || 'Sin SKU'} · Cantidad {item.quantity}</p></div>
+                              <div>
+                                {item.productId ? (
+                                  <Link href={`/productos/${item.productId}`} target="_blank" className="font-medium hover:underline">{item.title}</Link>
+                                ) : <p className="font-medium">{item.title}</p>}
+                                <p className="text-xs text-muted-foreground">{item.sku || 'Sin SKU'} · Cantidad {item.quantity}</p>
+                              </div>
                               <p className="font-bold">{money(Number(item.total), order.currency)}</p>
                             </div>
                           ))}
@@ -209,6 +249,10 @@ export function VendorOrdersManager() {
                         </div>
 
                         <div className="space-y-4 text-sm">
+                          <div>
+                            <p className="font-bold">Tienda</p>
+                            <Link href={`/tienda/${order.store.slug}`} target="_blank" className="text-muted-foreground hover:underline">{order.store.name}</Link>
+                          </div>
                           <div><p className="font-bold">Cliente</p><p>{order.buyer.name}</p><p className="text-muted-foreground">{order.buyer.email}</p>{order.buyer.phone && <p className="text-muted-foreground">{order.buyer.phone}</p>}</div>
                           <div><p className="font-bold">Entrega</p><p className="text-muted-foreground">{addressText(order.shippingAddress)}</p></div>
                           <div><p className="font-bold">Pago</p><p className="text-muted-foreground">{order.payment ? `${order.payment.provider} · ${order.payment.status}` : 'Pago pendiente'}</p></div>
