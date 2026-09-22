@@ -9,6 +9,7 @@ import { money } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
+import { OrderStatusTimeline } from '@/components/OrderStatusTimeline';
 
 type OrderStatus = 'PENDING' | 'PAID' | 'SHIPPED' | 'DELIVERED' | 'CANCELLED';
 
@@ -40,6 +41,7 @@ type BuyerOrder = {
     quantity: number;
     unitPrice: string | number;
     total: string | number;
+    product?: { id: string; slug: string; images?: Array<{ url: string }> } | null;
   }>;
 };
 
@@ -209,16 +211,22 @@ export function BuyerOrdersList() {
 
                   {isOpen && (
                     <div className="grid gap-5 border-t bg-muted/30 p-5 lg:grid-cols-[1fr_300px]">
-                      <div className="space-y-3">
+                      <div className="space-y-4">
+                        <OrderStatusTimeline status={order.status} accentColor={accent} />
                         <h3 className="font-bold">Productos</h3>
                         <div className="divide-y rounded-xl border bg-white">
                           {order.items.map((item) => (
-                            <div key={item.id} className="flex items-start justify-between gap-4 p-3">
-                              <div>
-                                {item.productId ? <Link href={`/productos/${item.productId}`} className="font-medium hover:underline">{item.title}</Link> : <p className="font-medium">{item.title}</p>}
-                                <p className="text-xs text-muted-foreground">Cantidad {item.quantity}{item.sku ? ` · ${item.sku}` : ''}</p>
+                            <div key={item.id} className="flex items-center justify-between gap-4 p-3">
+                              <div className="flex min-w-0 items-center gap-3">
+                                <div className="grid size-12 shrink-0 place-items-center overflow-hidden rounded-lg bg-muted">
+                                  {item.product?.images?.[0]?.url ? <img src={item.product.images[0].url} alt="" className="h-full w-full object-cover" /> : <Store className="size-4 text-muted-foreground" />}
+                                </div>
+                                <div className="min-w-0">
+                                  {item.productId ? <Link href={`/productos/${item.productId}`} className="truncate font-medium hover:underline">{item.title}</Link> : <p className="truncate font-medium">{item.title}</p>}
+                                  <p className="text-xs text-muted-foreground">Cantidad {item.quantity}{item.sku ? ` · ${item.sku}` : ''}</p>
+                                </div>
                               </div>
-                              <p className="font-semibold">{money(Number(item.total), order.currency)}</p>
+                              <p className="shrink-0 font-semibold">{money(Number(item.total), order.currency)}</p>
                             </div>
                           ))}
                         </div>

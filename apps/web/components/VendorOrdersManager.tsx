@@ -10,6 +10,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
+import { OrderStatusTimeline } from '@/components/OrderStatusTimeline';
 
 type OrderStatus = 'PENDING' | 'PAID' | 'SHIPPED' | 'DELIVERED' | 'CANCELLED';
 
@@ -24,7 +25,7 @@ type VendorOrder = {
   shippingAddress?: Record<string, unknown> | null;
   notes?: string | null;
   createdAt: string;
-  buyer: { id: string; name: string; email: string; phone?: string | null };
+  buyer: { id: string; name: string; email: string; phone?: string | null; avatarUrl?: string | null };
   store: {
     id: string;
     slug: string;
@@ -42,6 +43,7 @@ type VendorOrder = {
     quantity: number;
     unitPrice: string | number;
     total: string | number;
+    product?: { id: string; slug: string; images?: Array<{ url: string }> } | null;
   }>;
 };
 
@@ -232,17 +234,23 @@ export function VendorOrdersManager() {
 
                     {isOpen && (
                       <div className="mt-5 grid gap-5 rounded-xl bg-muted/40 p-4 lg:grid-cols-[1fr_320px]">
-                        <div className="space-y-3">
+                        <div className="space-y-4">
+                          <OrderStatusTimeline status={order.status} accentColor={accent} />
                           <h3 className="font-bold">Productos</h3>
                           {order.items.map((item) => (
-                            <div key={item.id} className="flex items-start justify-between gap-4 rounded-lg bg-white p-3">
-                              <div>
-                                {item.productId ? (
-                                  <Link href={`/productos/${item.productId}`} target="_blank" className="font-medium hover:underline">{item.title}</Link>
-                                ) : <p className="font-medium">{item.title}</p>}
-                                <p className="text-xs text-muted-foreground">{item.sku || 'Sin SKU'} · Cantidad {item.quantity}</p>
+                            <div key={item.id} className="flex items-center justify-between gap-4 rounded-lg bg-white p-3">
+                              <div className="flex min-w-0 items-center gap-3">
+                                <div className="grid size-12 shrink-0 place-items-center overflow-hidden rounded-lg bg-muted">
+                                  {item.product?.images?.[0]?.url ? <img src={item.product.images[0].url} alt="" className="h-full w-full object-cover" /> : <Store className="size-4 text-muted-foreground" />}
+                                </div>
+                                <div className="min-w-0">
+                                  {item.productId ? (
+                                    <Link href={`/productos/${item.productId}`} target="_blank" className="truncate font-medium hover:underline">{item.title}</Link>
+                                  ) : <p className="truncate font-medium">{item.title}</p>}
+                                  <p className="text-xs text-muted-foreground">{item.sku || 'Sin SKU'} · Cantidad {item.quantity}</p>
+                                </div>
                               </div>
-                              <p className="font-bold">{money(Number(item.total), order.currency)}</p>
+                              <p className="shrink-0 font-bold">{money(Number(item.total), order.currency)}</p>
                             </div>
                           ))}
                           <div className="flex justify-between border-t pt-3 text-lg font-black"><span>Total</span><span>{money(Number(order.total), order.currency)}</span></div>
@@ -253,7 +261,12 @@ export function VendorOrdersManager() {
                             <p className="font-bold">Tienda</p>
                             <Link href={`/tienda/${order.store.slug}`} target="_blank" className="text-muted-foreground hover:underline">{order.store.name}</Link>
                           </div>
-                          <div><p className="font-bold">Cliente</p><p>{order.buyer.name}</p><p className="text-muted-foreground">{order.buyer.email}</p>{order.buyer.phone && <p className="text-muted-foreground">{order.buyer.phone}</p>}</div>
+                          <div className="flex items-center gap-3">
+                            <div className="grid size-11 shrink-0 place-items-center overflow-hidden rounded-full bg-muted">
+                              {order.buyer.avatarUrl ? <img src={order.buyer.avatarUrl} alt="" className="h-full w-full object-cover" /> : <span className="font-bold">{order.buyer.name.slice(0,1)}</span>}
+                            </div>
+                            <div className="min-w-0"><p className="font-bold">{order.buyer.name}</p><p className="truncate text-muted-foreground">{order.buyer.email}</p>{order.buyer.phone && <p className="text-muted-foreground">{order.buyer.phone}</p>}</div>
+                          </div>
                           <div><p className="font-bold">Entrega</p><p className="text-muted-foreground">{addressText(order.shippingAddress)}</p></div>
                           <div><p className="font-bold">Pago</p><p className="text-muted-foreground">{order.payment ? `${order.payment.provider} · ${order.payment.status}` : 'Pago pendiente'}</p></div>
                           {order.notes && <div><p className="font-bold">Notas</p><p className="text-muted-foreground">{order.notes}</p></div>}
