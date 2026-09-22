@@ -1,5 +1,5 @@
 import { BadRequestException, Body, Controller, Get, Injectable, Module, Param, Patch, Post, UseGuards } from '@nestjs/common';
-import { IsIn, IsObject, IsOptional, IsString, MaxLength } from 'class-validator';
+import { IsIn, IsObject, IsOptional, IsString } from 'class-validator';
 import { DbService } from '../common/db.service';
 import { CartModule, CartService } from '../cart/cart.module';
 import { PaymentsModule } from '../payments/payments.module';
@@ -12,7 +12,7 @@ import { StorageService } from '../storage/storage.module';
 class CheckoutDto {
   @IsOptional() @IsObject() shippingAddress?: Record<string, unknown>;
   @IsOptional() @IsString() notes?: string;
-  @IsOptional() @IsString() @MaxLength(200) deviceId?: string;
+  @IsOptional() @IsString() deviceId?: string;
 }
 
 class OrderStatusDto {
@@ -27,6 +27,14 @@ class OrdersService {
     private readonly mp: MercadoPagoService,
     private readonly storage: StorageService,
   ) {}
+
+  private normalizeDeviceId(deviceId?: string) {
+    if (!deviceId) return undefined;
+    // Mercado Pago genera este valor como un identificador opaco. No debe truncarse.
+    // Si llega algo anormalmente grande, se omite para no romper el checkout ni
+    // convertir un valor controlado por el cliente en un header excesivo.
+    return deviceId.length <= 4096 ? deviceId : undefined;
+  }
 
   private normalizeStore<T extends { logoUrl?: string | null; coverUrl?: string | null }>(store: T): T {
     return {
@@ -112,7 +120,7 @@ class OrdersService {
         if (updated.count !== 1) throw new BadRequestException(`Stock modificado para ${product.title}`);
       }
 
-      const preference = await this.mp.createPreference(order.id, dto.deviceId);
+      const preference = await this.mp.createPreference(order.id, this.normalizeDeviceId(dto.deviceId));
       checkouts.push({
         orderId: order.id,
         preferenceId: preference.id,
