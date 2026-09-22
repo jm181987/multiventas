@@ -1,5 +1,5 @@
 import { BadRequestException, Body, Controller, Get, Injectable, Module, Param, Patch, Post, UseGuards } from '@nestjs/common';
-import { IsIn, IsObject, IsOptional, IsString } from 'class-validator';
+import { IsIn, IsObject, IsOptional, IsString, MaxLength } from 'class-validator';
 import { DbService } from '../common/db.service';
 import { CartModule, CartService } from '../cart/cart.module';
 import { PaymentsModule } from '../payments/payments.module';
@@ -12,6 +12,7 @@ import { StorageService } from '../storage/storage.module';
 class CheckoutDto {
   @IsOptional() @IsObject() shippingAddress?: Record<string, unknown>;
   @IsOptional() @IsString() notes?: string;
+  @IsOptional() @IsString() @MaxLength(200) deviceId?: string;
 }
 
 class OrderStatusDto {
@@ -111,7 +112,7 @@ class OrdersService {
         if (updated.count !== 1) throw new BadRequestException(`Stock modificado para ${product.title}`);
       }
 
-      const preference = await this.mp.createPreference(order.id);
+      const preference = await this.mp.createPreference(order.id, dto.deviceId);
       checkouts.push({
         orderId: order.id,
         preferenceId: preference.id,
