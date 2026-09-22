@@ -23,6 +23,7 @@ type BuyerOrder = {
   payment?: { status: string; provider: string; paidAt?: string | null } | null;
   items: Array<{
     id: string;
+    productId?: string | null;
     title: string;
     sku?: string | null;
     quantity: number;
@@ -100,7 +101,10 @@ export function BuyerOrdersList() {
                   <div className="mt-5 divide-y rounded-xl border">
                     {order.items.map((item) => (
                       <div key={item.id} className="flex items-start justify-between gap-4 p-3">
-                        <div><p className="font-medium">{item.title}</p><p className="text-xs text-muted-foreground">Cantidad {item.quantity}{item.sku ? ` · ${item.sku}` : ''}</p></div>
+                        <div>
+                          {item.productId ? <Link href={`/productos/${item.productId}`} className="font-medium hover:underline">{item.title}</Link> : <p className="font-medium">{item.title}</p>}
+                          <p className="text-xs text-muted-foreground">Cantidad {item.quantity}{item.sku ? ` · ${item.sku}` : ''}</p>
+                        </div>
                         <p className="font-semibold">{money(Number(item.total), order.currency)}</p>
                       </div>
                     ))}
