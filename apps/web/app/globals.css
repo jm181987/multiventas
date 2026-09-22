@@ -26,3 +26,54 @@
     linear-gradient(to bottom, rgb(0 0 0 / 0.05) 1px, transparent 1px);
   background-size: 32px 32px;
 }
+
+.tech-commerce-hero {
+  background:
+    radial-gradient(circle at 78% 24%, rgb(99 102 241 / 0.18), transparent 28%),
+    radial-gradient(circle at 88% 64%, rgb(34 211 238 / 0.10), transparent 24%),
+    linear-gradient(135deg, #070A12 0%, #090D18 48%, #111827 100%);
+}
+
+.tech-commerce-grid {
+  background-image:
+    linear-gradient(to right, rgb(255 255 255 / 0.035) 1px, transparent 1px),
+    linear-gradient(to bottom, rgb(255 255 255 / 0.035) 1px, transparent 1px);
+  background-size: 38px 38px;
+  mask-image: linear-gradient(to bottom, black 0%, transparent 88%);
+}
+
+.tech-commerce-panel {
+  background:
+    radial-gradient(circle at 75% 20%, rgb(99 102 241 / 0.14), transparent 35%),
+    #0b1020;
+}
+
+@keyframes tech-float {
+  0%, 100% { transform: translate3d(0, 0, 0); }
+  50% { transform: translate3d(0, -8px, 0); }
+}
+
+@keyframes tech-pulse {
+  0%, 100% { opacity: 0.45; transform: scale(1); }
+  50% { opacity: 0.8; transform: scale(1.05); }
+}
+
+.tech-float {
+  animation: tech-float 6s ease-in-out infinite;
+}
+
+.tech-float-delayed {
+  animation: tech-float 7s ease-in-out 1.2s infinite;
+}
+
+.tech-pulse {
+  animation: tech-pulse 5s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tech-float,
+  .tech-float-delayed,
+  .tech-pulse {
+    animation: none;
+  }
+}
