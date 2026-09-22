@@ -129,6 +129,15 @@ admin_access=$(echo "$admin" | jq -r '.accessToken // empty')
 dashboard=$(request GET /admin/dashboard "$admin_access") || fail "admin dashboard"
 echo "$dashboard" | jq -e '.users >= 4 and .vendors >= 3 and .products >= 11' >/dev/null || fail "admin dashboard counts invalid"
 
+mp_before=$(request GET /admin/mercadopago "$admin_access") || fail "admin Mercado Pago config"
+echo "$mp_before" | jq -e '.provider == "MERCADO_PAGO" and .hasClientSecret == true' >/dev/null || fail "admin Mercado Pago defaults invalid"
+
+request PATCH /admin/mercadopago "$admin_access" '{"accountEmail":"fees@multiventas.test","clientId":"ci-marketplace-client","clientSecret":"ci-marketplace-secret","feeRate":0.075}' >/tmp/mp-config.json || fail "admin Mercado Pago update"
+jq -e '.accountEmail == "fees@multiventas.test" and .clientId == "ci-marketplace-client" and .hasClientSecret == true and (.feeRate|tonumber) == 0.075 and (has("clientSecret")|not)' /tmp/mp-config.json >/dev/null || fail "admin Mercado Pago config response invalid"
+
+mp_connect=$(request GET /payments/mercadopago/connect "$vendor_access") || fail "vendor Mercado Pago OAuth URL"
+echo "$mp_connect" | jq -e '.authorizationUrl | contains("client_id=ci-marketplace-client")' >/dev/null || fail "vendor OAuth did not use admin marketplace config"
+
 review_body='{"status":"APPROVED","kycStatus":"VERIFIED"}'
 request PATCH "/vendors/$vendor_id/review" "$admin_access" "$review_body" >/tmp/vendor-review.json || fail "admin vendor approval"
 
