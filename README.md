@@ -75,3 +75,21 @@ Para carga media puede usarse el pool de Prisma con `connection_limit`. Para alt
 - Webhooks MP validan HMAC.
 - RLS se fuerza en tablas tenant.
 - No hay custodia de fondos: Mercado Pago ejecuta el split en checkout.
+
+
+## Dominio de producción
+
+La URL pública canónica es `https://sevende.knjpro.site`.
+
+En Coolify, el dominio debe apuntar al servicio `web`. El navegador usa el mismo origen para:
+- `/api/*` -> proxy interno al servicio NestJS.
+- `/media/*` -> proxy interno a MinIO.
+- callbacks y webhooks de Mercado Pago.
+
+La variable recomendada es:
+
+```env
+PUBLIC_ORIGIN=https://sevende.knjpro.site
+```
+
+No es necesario exponer dominios públicos separados para API o MinIO.
