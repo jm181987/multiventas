@@ -2,7 +2,7 @@ import { Controller, Get, Module, ServiceUnavailableException } from '@nestjs/co
 import { DbService } from '../common/db.service';
 import { SkipTenantContext } from '../common/decorators';
 
-const REQUIRED_MIGRATION = '202609220006_promote_jorgitom_admin';
+const REQUIRED_MIGRATION = '202609220007_store_access_marketplace_config';
 
 @SkipTenantContext()
 @Controller('health')
@@ -37,7 +37,7 @@ class HealthController {
     `;
 
     if (!migration?.applied) {
-      throw new ServiceUnavailableException('Esperando actualización del administrador');
+      throw new ServiceUnavailableException('Esperando corrección de tiendas y configuración de Mercado Pago');
     }
 
     return {

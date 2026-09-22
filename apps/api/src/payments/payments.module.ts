@@ -12,8 +12,8 @@ class MercadoPagoController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles(UserRole.VENDOR)
   @Get('connect')
-  connect(@CurrentUser() user: AuthUser) {
-    return { authorizationUrl: this.mp.getAuthorizationUrl(user.tenantId!) };
+  async connect(@CurrentUser() user: AuthUser) {
+    return { authorizationUrl: await this.mp.getAuthorizationUrl(user.tenantId!) };
   }
 
   @SystemContext()

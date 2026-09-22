@@ -87,6 +87,40 @@ jobs:
       - name: Seed integration database
         run: pnpm db:seed
 
+      - name: Public RLS store access
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat >/tmp/rls-store-access.sql <<'SQL'
+          DROP ROLE IF EXISTS rls_probe;
+          CREATE ROLE rls_probe NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOBYPASSRLS;
+          GRANT USAGE ON SCHEMA public TO rls_probe;
+          GRANT SELECT ON vendors, stores, products, product_images TO rls_probe;
+
+          BEGIN;
+          SET LOCAL ROLE rls_probe;
+          SELECT set_config('app.role', 'public', true);
+          SELECT set_config('app.public', 'true', true);
+          SELECT set_config('app.tenant_id', '', true);
+          SELECT set_config('app.user_id', '', true);
+
+          SELECT 1 / CASE WHEN count(*) = 1 THEN 1 ELSE 0 END AS public_store_visible
+          FROM stores s
+          JOIN vendors v ON v.id = s.tenant_id
+          WHERE s.slug = 'tienda-demo-1'
+            AND s.status = 'ACTIVE'
+            AND s.deleted_at IS NULL
+            AND v.status = 'APPROVED'
+            AND v.deleted_at IS NULL;
+          ROLLBACK;
+          SQL
+
+          docker run --rm --network host \
+            -e PGPASSWORD=ci \
+            -v /tmp/rls-store-access.sql:/tmp/rls-store-access.sql:ro \
+            postgres:16-alpine \
+            psql -h 127.0.0.1 -U ci -d ci -v ON_ERROR_STOP=1 -f /tmp/rls-store-access.sql
+
       - name: Functional API integration
         run: bash scripts/ci-functional-smoke.sh
 

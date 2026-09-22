@@ -28,10 +28,11 @@ export class MercadoPagoService {
     private readonly config: ConfigService,
   ) {}
 
-  getAuthorizationUrl(vendorId: string): string {
+  async getAuthorizationUrl(vendorId: string): Promise<string> {
+    const marketplace = await this.getRuntimeMarketplaceConfig();
     const state = this.signState(vendorId);
     const params = new URLSearchParams({
-      client_id: this.config.getOrThrow('MP_CLIENT_ID'),
+      client_id: marketplace.clientId,
       response_type: 'code',
       platform_id: 'mp',
       redirect_uri: this.config.getOrThrow('MP_REDIRECT_URI'),
@@ -39,6 +40,58 @@ export class MercadoPagoService {
       scope: 'offline_access',
     });
     return `https://auth.mercadopago.com.uy/authorization?${params.toString()}`;
+  }
+
+  async getMarketplaceAdminConfig() {
+    const saved = await this.db.client.marketplaceConfig.findUnique({
+      where: { provider: PaymentProvider.MERCADO_PAGO },
+    });
+    const runtime = await this.getRuntimeMarketplaceConfig();
+    return {
+      provider: 'MERCADO_PAGO',
+      accountEmail: saved?.accountEmail ?? null,
+      clientId: runtime.clientId,
+      hasClientSecret: Boolean(saved?.clientSecretEncrypted || this.config.get('MP_CLIENT_SECRET')),
+      feeRate: runtime.feeRate,
+      source: saved ? 'database' : 'environment',
+      redirectUri: this.config.get('MP_REDIRECT_URI') ?? null,
+      webhookUrl: this.config.get('MP_WEBHOOK_URL') ?? null,
+    };
+  }
+
+  async updateMarketplaceAdminConfig(input: {
+    accountEmail?: string | null;
+    clientId?: string | null;
+    clientSecret?: string | null;
+    feeRate?: number;
+  }) {
+    const existing = await this.db.client.marketplaceConfig.findUnique({
+      where: { provider: PaymentProvider.MERCADO_PAGO },
+    });
+
+    const clientSecretEncrypted = input.clientSecret?.trim()
+      ? this.encrypt(input.clientSecret.trim())
+      : existing?.clientSecretEncrypted ?? null;
+
+    await this.db.client.marketplaceConfig.upsert({
+      where: { provider: PaymentProvider.MERCADO_PAGO },
+      create: {
+        id: 'mercado_pago',
+        provider: PaymentProvider.MERCADO_PAGO,
+        accountEmail: input.accountEmail?.trim() || null,
+        clientId: input.clientId?.trim() || null,
+        clientSecretEncrypted,
+        feeRate: input.feeRate ?? Number(this.config.get('MP_MARKETPLACE_FEE_RATE') ?? '0.08'),
+      },
+      update: {
+        accountEmail: input.accountEmail === undefined ? undefined : (input.accountEmail?.trim() || null),
+        clientId: input.clientId === undefined ? undefined : (input.clientId?.trim() || null),
+        clientSecretEncrypted,
+        feeRate: input.feeRate,
+      },
+    });
+
+    return this.getMarketplaceAdminConfig();
   }
 
   verifyState(state: string): string {
@@ -116,7 +169,7 @@ export class MercadoPagoService {
     });
     if (!oauth) throw new BadRequestException('Vendedor sin Mercado Pago');
 
-    const feeRate = Number(this.config.get('MP_MARKETPLACE_FEE_RATE') ?? '0.08');
+    const feeRate = (await this.getRuntimeMarketplaceConfig()).feeRate;
     const total = Number(order.total);
     const marketplaceFee = Math.round(total * feeRate * 100) / 100;
     const accessToken = this.decrypt(oauth.accessToken);
@@ -294,9 +347,10 @@ export class MercadoPagoService {
   }
 
   private async oauthTokenRequest(data: Record<string, string>): Promise<OAuthResponse> {
+    const marketplace = await this.getRuntimeMarketplaceConfig();
     const body = new URLSearchParams({
-      client_id: this.config.getOrThrow('MP_CLIENT_ID'),
-      client_secret: this.config.getOrThrow('MP_CLIENT_SECRET'),
+      client_id: marketplace.clientId,
+      client_secret: marketplace.clientSecret,
       ...data,
     });
     const response = await fetch(`${this.api}/oauth/token`, {
@@ -320,6 +374,28 @@ export class MercadoPagoService {
     });
     if (!response.ok) throw new BadGatewayException(`Mercado Pago API: ${response.status} ${await response.text()}`);
     return response.json() as Promise<T>;
+  }
+
+  private async getRuntimeMarketplaceConfig() {
+    const saved = await this.db.client.marketplaceConfig.findUnique({
+      where: { provider: PaymentProvider.MERCADO_PAGO },
+    });
+
+    const clientId = saved?.clientId?.trim() || this.config.get<string>('MP_CLIENT_ID')?.trim();
+    const clientSecret = saved?.clientSecretEncrypted
+      ? this.decrypt(saved.clientSecretEncrypted)
+      : this.config.get<string>('MP_CLIENT_SECRET')?.trim();
+
+    if (!clientId || !clientSecret) {
+      throw new BadRequestException('Configura Client ID y Client Secret de Mercado Pago en Administración');
+    }
+
+    return {
+      clientId,
+      clientSecret,
+      feeRate: saved ? Number(saved.feeRate) : Number(this.config.get('MP_MARKETPLACE_FEE_RATE') ?? '0.08'),
+      accountEmail: saved?.accountEmail ?? null,
+    };
   }
 
   private signState(vendorId: string) {

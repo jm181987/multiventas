@@ -373,3 +373,17 @@ model AuditLog {
   @@index([actorUserId, createdAt])
   @@map("audit_logs")
 }
+
+
+model MarketplaceConfig {
+  id                    String          @id @default("mercado_pago") @db.VarChar(40)
+  provider              PaymentProvider @unique
+  accountEmail          String?         @map("account_email") @db.VarChar(320)
+  clientId              String?         @map("client_id") @db.VarChar(180)
+  clientSecretEncrypted String?         @map("client_secret_encrypted")
+  feeRate               Decimal         @default(0.08) @map("fee_rate") @db.Decimal(5, 4)
+  createdAt             DateTime        @default(now()) @map("created_at")
+  updatedAt             DateTime        @updatedAt @map("updated_at")
+
+  @@map("marketplace_configs")
+}
