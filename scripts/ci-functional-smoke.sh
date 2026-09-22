@@ -125,9 +125,25 @@ admin_body=$(jq -cn '{email:"jorgitom18@gmail.com",password:"ChangeMeNow123!"}')
 admin=$(request POST /auth/login "" "$admin_body") || fail "admin login"
 admin_access=$(echo "$admin" | jq -r '.accessToken // empty')
 [ -n "$admin_access" ] || fail "admin token missing"
+echo "$admin" | jq -e '.user.roles | index("ADMIN")' >/dev/null || fail "jorgitom18 admin role missing"
 
 dashboard=$(request GET /admin/dashboard "$admin_access") || fail "admin dashboard"
-echo "$dashboard" | jq -e '.users >= 4 and .vendors >= 3 and .products >= 11' >/dev/null || fail "admin dashboard counts invalid"
+echo "$dashboard" | jq -e '.users >= 4 and .vendors >= 3 and .products >= 11 and (.pendingVendors >= 1)' >/dev/null || fail "admin dashboard counts invalid"
+
+admin_users=$(request GET /users "$admin_access") || fail "admin users"
+echo "$admin_users" | jq -e 'length >= 4' >/dev/null || fail "admin users list invalid"
+
+admin_vendors=$(request GET /vendors "$admin_access") || fail "admin vendors"
+echo "$admin_vendors" | jq -e 'length >= 3' >/dev/null || fail "admin vendors list invalid"
+
+request GET /admin/transactions "$admin_access" >/tmp/admin-transactions.json || fail "admin transactions"
+request GET /admin/commissions "$admin_access" >/tmp/admin-commissions.json || fail "admin commissions"
+
+buyer_orders=$(request GET /orders/mine "$buyer_access") || fail "buyer orders"
+echo "$buyer_orders" | jq -e 'type == "array"' >/dev/null || fail "buyer orders invalid"
+
+vendor_orders=$(request GET /vendor/orders "$vendor_access") || fail "vendor orders"
+echo "$vendor_orders" | jq -e 'type == "array"' >/dev/null || fail "vendor orders invalid"
 
 review_body='{"status":"APPROVED","kycStatus":"VERIFIED"}'
 request PATCH "/vendors/$vendor_id/review" "$admin_access" "$review_body" >/tmp/vendor-review.json || fail "admin vendor approval"
