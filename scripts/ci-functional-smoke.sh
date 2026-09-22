@@ -136,6 +136,8 @@ echo "$admin_users" | jq -e 'length >= 4' >/dev/null || fail "admin users list i
 admin_vendors=$(request GET /vendors "$admin_access") || fail "admin vendors"
 echo "$admin_vendors" | jq -e 'length >= 3' >/dev/null || fail "admin vendors list invalid"
 
+request GET /admin/orders "$admin_access" >/tmp/admin-orders.json || fail "admin orders"
+jq -e 'type == "array"' /tmp/admin-orders.json >/dev/null || fail "admin orders invalid"
 request GET /admin/transactions "$admin_access" >/tmp/admin-transactions.json || fail "admin transactions"
 request GET /admin/commissions "$admin_access" >/tmp/admin-commissions.json || fail "admin commissions"
 
@@ -171,7 +173,7 @@ vendor_products=$(request GET /vendor/products "$vendor_access") || fail "vendor
 echo "$vendor_products" | jq -e 'length == 1 and .[0].slug == "ci-product" and .[0].status == "ACTIVE" and .[0].stock == 8 and (. [0].images | length) == 1' >/dev/null || fail "tenant product management failed"
 
 public_vendor_products=$(request GET '/products?q=CI%20Product%20Updated') || fail "public vendor product search"
-echo "$public_vendor_products" | jq -e --arg id "$vendor_product_id" 'any(.items[]; .id == $id and .status == "ACTIVE")' >/dev/null || fail "published vendor product is not visible publicly"
+echo "$public_vendor_products" | jq -e --arg id "$vendor_product_id" 'any(.items[]; .id == $id and .status == "ACTIVE" and .store.name == "CI Store Branded" and .store.primaryColor == "#112233")' >/dev/null || fail "published vendor product is not visible publicly with store branding"
 
 request DELETE "/vendor/products/$vendor_product_id/images/$vendor_image_id" "$vendor_access" >/tmp/vendor-product-image-delete.json || fail "vendor product image delete"
 
