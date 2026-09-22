@@ -117,7 +117,7 @@ export function VendorOrdersManager() {
       </div>
 
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        {[
+        {([
           ['Pendientes', counters.pending, Clock3],
           ['Pagados', counters.paid, CheckCircle2],
           ['En camino', counters.shipped, Truck],
