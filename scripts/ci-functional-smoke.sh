@@ -144,6 +144,12 @@ jq -e '.name == "CI Store Branded" and .description == "Brand test" and .primary
 public_store=$(request GET /stores/ci-store) || fail "public branded store"
 echo "$public_store" | jq -e '.name == "CI Store Branded" and .primaryColor == "#112233"' >/dev/null || fail "public store branding missing"
 
+buyer_orders=$(request GET /orders/mine "$buyer_access") || fail "buyer orders"
+echo "$buyer_orders" | jq -e 'type == "array"' >/dev/null || fail "buyer orders invalid"
+
+vendor_orders=$(request GET /vendor/orders "$vendor_access") || fail "vendor orders"
+echo "$vendor_orders" | jq -e 'type == "array"' >/dev/null || fail "vendor orders invalid"
+
 request PATCH "/vendor/products/$vendor_product_id" "$vendor_access" '{"title":"CI Product Updated","price":1299,"stock":8,"status":"ACTIVE"}' >/tmp/vendor-product-update.json || fail "vendor product update"
 jq -e '.title == "CI Product Updated" and (.price|tonumber) == 1299 and .stock == 8 and .status == "ACTIVE"' /tmp/vendor-product-update.json >/dev/null || fail "vendor product update not persisted"
 
@@ -156,6 +162,9 @@ echo "$vendor_products" | jq -e 'length == 1 and .[0].slug == "ci-product" and .
 
 public_vendor_products=$(request GET '/products?q=CI%20Product%20Updated') || fail "public vendor product search"
 echo "$public_vendor_products" | jq -e --arg id "$vendor_product_id" 'any(.items[]; .id == $id and .status == "ACTIVE")' >/dev/null || fail "published vendor product is not visible publicly"
+
+public_store=$(request GET /stores/ci-store) || fail "public branded store after publish"
+echo "$public_store" | jq -e --arg id "$vendor_product_id" '.primaryColor == "#112233" and any(.products[]; .id == $id and .store.name == "CI Store Branded")' >/dev/null || fail "branded storefront product data invalid"
 
 request DELETE "/vendor/products/$vendor_product_id/images/$vendor_image_id" "$vendor_access" >/tmp/vendor-product-image-delete.json || fail "vendor product image delete"
 
