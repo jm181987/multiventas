@@ -71,6 +71,11 @@ class ProductsService {
     if (!value?.images) return product;
     return {
       ...value,
+      store: value.store ? {
+        ...value.store,
+        logoUrl: value.store.logoUrl ? this.storage.normalizeMediaUrl(value.store.logoUrl) : null,
+        coverUrl: value.store.coverUrl ? this.storage.normalizeMediaUrl(value.store.coverUrl) : null,
+      } : value.store,
       images: value.images.map((image: any) => ({
         ...image,
         url: this.storage.normalizeProductImageUrl(image.url),
