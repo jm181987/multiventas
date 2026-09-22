@@ -142,13 +142,16 @@ request POST /vendor/products "$vendor_access" "$vendor_product_body" >/tmp/vend
 vendor_product_id=$(jq -r '.id // empty' /tmp/vendor-product.json)
 [ -n "$vendor_product_id" ] || fail "created vendor product id missing"
 
-admin_body=$(jq -cn '{email:"admin@multiventas.local",password:"ChangeMeNow123!"}')
+admin_body=$(jq -cn '{email:"jorgitom18@gmail.com",password:"ChangeMeNow123!"}')
 admin=$(request POST /auth/login "" "$admin_body") || fail "admin login"
 admin_access=$(echo "$admin" | jq -r '.accessToken // empty')
 [ -n "$admin_access" ] || fail "admin token missing"
 
 dashboard=$(request GET /admin/dashboard "$admin_access") || fail "admin dashboard"
 echo "$dashboard" | jq -e '.users >= 4 and .vendors >= 3 and .products >= 11' >/dev/null || fail "admin dashboard counts invalid"
+echo "$admin" | jq -e '.user.roles | index("ADMIN")' >/dev/null || fail "jorgitom admin role missing"
+request GET /admin/orders "$admin_access" >/tmp/admin-orders.json || fail "admin orders"
+jq -e 'type == "array"' /tmp/admin-orders.json >/dev/null || fail "admin orders response invalid"
 
 mp_before=$(request GET /admin/mercadopago "$admin_access") || fail "admin Mercado Pago config"
 echo "$mp_before" | jq -e '.provider == "MERCADO_PAGO" and .hasClientSecret == true' >/dev/null || fail "admin Mercado Pago defaults invalid"
