@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import { LogOut, Menu, ShoppingBag, Store, UserCircle, X } from 'lucide-react';
+import { LogOut, Menu, ShoppingBag, UserCircle, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useCartUi } from '@/store/cart';
 import { CartDrawer } from './CartDrawer';
@@ -29,9 +29,9 @@ export function SiteHeader() {
     <>
       <header className="sticky top-0 z-40 border-b bg-white/90 backdrop-blur">
         <div className="mx-auto flex h-16 max-w-7xl items-center gap-3 px-4">
-          <Link href="/" className="flex items-center gap-2 font-black tracking-tight" onClick={() => setMobileOpen(false)}>
-            <span className="grid size-9 place-items-center rounded-xl bg-black text-white"><Store className="size-5" /></span>
-            <span>Multiventas</span>
+          <Link href="/" className="flex items-center gap-2 font-black tracking-tight" onClick={() => setMobileOpen(false)} aria-label="SeVende - Inicio">
+            <img src="/knj-logo.webp" alt="KNJ" className="h-11 w-auto object-contain" />
+            <span className="hidden text-lg sm:inline">SeVende</span>
           </Link>
 
           <nav className="ml-auto hidden items-center gap-5 text-sm md:flex">
