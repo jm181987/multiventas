@@ -14,7 +14,7 @@ import { useCartUi } from '@/store/cart';
 export function ProductCard({ product, accentColor }: { product: Product; accentColor?: string }) {
   const qc = useQueryClient();
   const open = useCartUi((s) => s.setOpen);
-  const image = product.images?.[0]?.url ?? 'https://placehold.co/800x800?text=Multiventas';
+  const image = product.images?.[0]?.url ?? 'https://placehold.co/800x800?text=SeVende';
   const storeAccent = accentColor || product.store?.primaryColor || '#18181b';
   const storeAccentText = contrastText(storeAccent);
 
@@ -48,7 +48,7 @@ export function ProductCard({ product, accentColor }: { product: Product; accent
               <span className="truncate">{product.store.name}</span>
             </Link>
           ) : <span />}
-          <span className="shrink-0 text-xs text-muted-foreground">{product.stock} disponibles</span>
+          <span className={`shrink-0 text-xs font-medium ${product.stock > 0 ? 'text-[#10B981]' : 'text-muted-foreground'}`}>{product.stock > 0 ? `${product.stock} disponibles` : 'Sin stock'}</span>
         </div>
 
         <Link href={`/productos/${product.id}`} className="line-clamp-2 min-h-12 font-semibold">{product.title}</Link>
