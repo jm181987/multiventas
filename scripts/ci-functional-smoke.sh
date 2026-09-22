@@ -117,6 +117,7 @@ vendor_access=$(echo "$vendor" | jq -r '.accessToken // empty')
 
 mp_status=$(request GET /payments/mercadopago/status "$vendor_access") || fail "Mercado Pago status"
 echo "$mp_status" | jq -e '.connected == false' >/dev/null || fail "new vendor should not have Mercado Pago connected"
+echo "$mp_status" | jq -e '.redirectUri == "https://example.com/api/payments/mercadopago/callback"' >/dev/null || fail "Mercado Pago redirect URI was not derived from WEB_PUBLIC_URL"
 
 mp_connect=$(request GET /payments/mercadopago/connect "$vendor_access") || fail "Mercado Pago connect URL"
 mp_url=$(echo "$mp_connect" | jq -r '.authorizationUrl // empty')
@@ -124,6 +125,7 @@ mp_url=$(echo "$mp_connect" | jq -r '.authorizationUrl // empty')
 echo "$mp_url" | grep -q '^https://auth\.mercadopago\.com\.uy/authorization?' || fail "Mercado Pago authorization host invalid"
 echo "$mp_url" | grep -q 'client_id=ci' || fail "Mercado Pago client_id missing"
 echo "$mp_url" | grep -q 'platform_id=mp' || fail "Mercado Pago platform_id missing"
+echo "$mp_url" | grep -q 'redirect_uri=https%3A%2F%2Fexample.com%2Fapi%2Fpayments%2Fmercadopago%2Fcallback' || fail "Mercado Pago derived redirect_uri missing"
 if echo "$mp_url" | grep -q 'scope='; then fail "Mercado Pago OAuth URL contains unsupported explicit scope"; fi
 
 vendor_me=$(request GET /vendors/me "$vendor_access") || fail "vendor profile"

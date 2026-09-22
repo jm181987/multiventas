@@ -40,7 +40,7 @@ jobs:
       TOKEN_ENCRYPTION_KEY: AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=
       MP_CLIENT_ID: ci
       MP_CLIENT_SECRET: ci
-      MP_REDIRECT_URI: https://example.com/api/payments/mercadopago/callback
+      MP_REDIRECT_URI: ""
       MP_WEBHOOK_SECRET: ci
       MP_WEBHOOK_URL: https://example.com/api/webhooks/mercadopago
       WEB_PUBLIC_URL: https://example.com
