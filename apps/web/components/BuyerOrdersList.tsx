@@ -87,11 +87,13 @@ export function BuyerOrdersList() {
   const qc = useQueryClient();
   const [filter, setFilter] = useState<'ALL' | OrderStatus>('ALL');
   const [expanded, setExpanded] = useState<string | null>(null);
+  const [actionError, setActionError] = useState('');
 
   const query = useQuery({ queryKey: ['buyer-orders'], queryFn: () => authApi<BuyerOrder[]>('/orders/mine') });
   const cancel = useMutation({
     mutationFn: (id: string) => authApi(`/orders/${id}/cancel`, { method: 'PATCH' }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['buyer-orders'] }),
+    onSuccess: () => { setActionError(''); qc.invalidateQueries({ queryKey: ['buyer-orders'] }); },
+    onError: (e) => setActionError(e instanceof Error ? e.message : 'No se pudo cancelar el pedido'),
   });
 
   const orders = query.data ?? [];
@@ -134,6 +136,8 @@ export function BuyerOrdersList() {
           ))}
         </div>
       )}
+
+      {actionError && <div className="rounded-lg bg-red-50 p-3 text-sm text-red-700">{actionError}</div>}
 
       {query.isLoading ? (
         <p className="text-sm text-muted-foreground">Cargando pedidos…</p>

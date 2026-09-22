@@ -4,6 +4,7 @@ import { Search, ShieldCheck, Store } from 'lucide-react';
 import { publicApi } from '@/lib/api';
 import { ProductGrid } from '@/components/ProductGrid';
 import { ProductSearch, Store as StoreType } from '@/lib/types';
+import { contrastText } from '@/lib/utils';
 
 export const dynamic = 'force-dynamic';
 
@@ -44,6 +45,7 @@ export default async function StorePage({
   if (!store) notFound();
 
   const accent = store.primaryColor || '#18181b';
+  const accentText = contrastText(accent);
   const totalPages = Math.max(1, Math.ceil(products.total / products.limit));
 
   return (
@@ -70,7 +72,7 @@ export default async function StorePage({
       <section className="border-b" style={{ borderColor: `${accent}33` }}>
         <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-3 px-4 py-4">
           <div className="flex flex-wrap items-center gap-3">
-            <Link href={`/tienda/${store.slug}`} className="rounded-full px-4 py-2 text-sm font-semibold text-white" style={{ backgroundColor: accent }}>Todos los productos</Link>
+            <Link href={`/tienda/${store.slug}`} className="rounded-full px-4 py-2 text-sm font-semibold" style={{ backgroundColor: accent, color: accentText }}>Todos los productos</Link>
             <Link href="/tiendas" className="text-sm font-semibold text-muted-foreground hover:text-foreground">← Ver otras tiendas</Link>
           </div>
           <span className="text-sm text-muted-foreground">Compra directamente en {store.name}</span>
@@ -88,7 +90,7 @@ export default async function StorePage({
               <Search className="absolute left-3 top-3 size-4 text-muted-foreground" />
               <input name="q" defaultValue={q} className="h-10 w-full rounded-md border bg-background pl-9 pr-3 text-sm" placeholder="Buscar en esta tienda…" />
             </div>
-            <button className="h-10 rounded-md px-4 text-sm font-semibold text-white" style={{ backgroundColor: accent }}>Buscar</button>
+            <button className="h-10 rounded-md px-4 text-sm font-semibold" style={{ backgroundColor: accent, color: accentText }}>Buscar</button>
           </form>
         </div>
 

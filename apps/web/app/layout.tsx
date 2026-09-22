@@ -5,8 +5,10 @@ import { SiteHeader } from '@/components/site-header';
 import { SiteFooter } from '@/components/SiteFooter';
 
 export const metadata: Metadata = {
+  metadataBase: new URL('https://www.sevende.knjpro.site'),
   title: 'Multiventas',
   description: 'Marketplace multi-vendedor para Uruguay y Latinoamérica',
+  alternates: { canonical: '/' },
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {

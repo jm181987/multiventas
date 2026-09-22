@@ -5,7 +5,7 @@ import { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { CheckCircle2, Clock3, ExternalLink, PackageCheck, Search, Store, Truck, XCircle } from 'lucide-react';
 import { authApi } from '@/lib/api';
-import { money } from '@/lib/utils';
+import { contrastText, money } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
@@ -87,6 +87,7 @@ export function VendorOrdersManager() {
   const [filter, setFilter] = useState<'ALL' | OrderStatus>('ALL');
   const [storeFilter, setStoreFilter] = useState('ALL');
   const [expanded, setExpanded] = useState<string | null>(null);
+  const [actionError, setActionError] = useState('');
 
   const query = useQuery({
     queryKey: ['vendor-orders'],
@@ -96,7 +97,8 @@ export function VendorOrdersManager() {
   const update = useMutation({
     mutationFn: ({ id, status }: { id: string; status: OrderStatus }) =>
       authApi(`/vendor/orders/${id}/status`, { method: 'PATCH', body: JSON.stringify({ status }) }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['vendor-orders'] }),
+    onSuccess: () => { setActionError(''); qc.invalidateQueries({ queryKey: ['vendor-orders'] }); },
+    onError: (e) => setActionError(e instanceof Error ? e.message : 'No se pudo actualizar el pedido'),
   });
 
   const orders = query.data ?? [];
@@ -151,6 +153,8 @@ export function VendorOrdersManager() {
           </Card>
         ))}
       </div>
+
+      {actionError && <div className="rounded-lg bg-red-50 p-3 text-sm text-red-700">{actionError}</div>}
 
       <Card>
         <CardHeader className="border-b">
@@ -220,6 +224,7 @@ export function VendorOrdersManager() {
                             size="sm"
                             variant={action.status === 'CANCELLED' ? 'outline' : 'default'}
                             className={action.status === 'CANCELLED' ? 'text-red-600' : ''}
+                            style={action.status === 'CANCELLED' ? undefined : { backgroundColor: accent, color: contrastText(accent) }}
                             disabled={update.isPending}
                             onClick={() => {
                               if (action.status === 'CANCELLED' && !confirm('¿Cancelar este pedido? El stock reservado será devuelto.')) return;

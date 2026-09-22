@@ -75,6 +75,19 @@ class AdminService {
     };
   }
 
+  orders() {
+    return this.db.client.order.findMany({
+      include: {
+        store: { select: { id: true, slug: true, name: true, logoUrl: true, primaryColor: true } },
+        buyer: { select: { id: true, name: true, email: true } },
+        payment: true,
+        items: true,
+      },
+      orderBy: { createdAt: 'desc' },
+      take: 500,
+    });
+  }
+
   transactions() {
     return this.db.client.payment.findMany({
       include: {
@@ -129,6 +142,9 @@ class AdminController {
 
   @Get('dashboard')
   dashboard() { return this.admin.dashboard(); }
+
+  @Get('orders')
+  orders() { return this.admin.orders(); }
 
   @Get('transactions')
   transactions() { return this.admin.transactions(); }
