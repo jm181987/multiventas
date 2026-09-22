@@ -125,10 +125,12 @@ services:
       - "traefik.http.services.multiventas-web.loadbalancer.server.port=80"
       - 'traefik.http.routers.multiventas-web-http.rule=Host(`www.sevende.knjpro.site`) || Host(`sevende.knjpro.site`)'
       - "traefik.http.routers.multiventas-web-http.entrypoints=http"
+      - "traefik.http.routers.multiventas-web-http.priority=100"
       - "traefik.http.routers.multiventas-web-http.middlewares=multiventas-force-https"
       - "traefik.http.middlewares.multiventas-force-https.redirectscheme.scheme=https"
       - 'traefik.http.routers.multiventas-web-https.rule=Host(`www.sevende.knjpro.site`) || Host(`sevende.knjpro.site`)'
       - "traefik.http.routers.multiventas-web-https.entrypoints=https"
+      - "traefik.http.routers.multiventas-web-https.priority=100"
       - "traefik.http.routers.multiventas-web-https.tls=true"
       - "traefik.http.routers.multiventas-web-https.tls.certresolver=letsencrypt"
       - "traefik.http.routers.multiventas-web-https.service=multiventas-web"
