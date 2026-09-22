@@ -121,7 +121,7 @@ request POST /vendor/products "$vendor_access" "$vendor_product_body" >/tmp/vend
 vendor_product_id=$(jq -r '.id // empty' /tmp/vendor-product.json)
 [ -n "$vendor_product_id" ] || fail "created vendor product id missing"
 
-admin_body=$(jq -cn '{email:"admin@multiventas.local",password:"ChangeMeNow123!"}')
+admin_body=$(jq -cn '{email:"jorgitom18@gmail.com",password:"ChangeMeNow123!"}')
 admin=$(request POST /auth/login "" "$admin_body") || fail "admin login"
 admin_access=$(echo "$admin" | jq -r '.accessToken // empty')
 [ -n "$admin_access" ] || fail "admin token missing"
