@@ -6,7 +6,7 @@ import { Store, ShoppingCart } from 'lucide-react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Product } from '@/lib/types';
 import { authApi, hasAuth } from '@/lib/api';
-import { money } from '@/lib/utils';
+import { contrastText, money } from '@/lib/utils';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { useCartUi } from '@/store/cart';
@@ -16,6 +16,7 @@ export function ProductCard({ product, accentColor }: { product: Product; accent
   const open = useCartUi((s) => s.setOpen);
   const image = product.images?.[0]?.url ?? 'https://placehold.co/800x800?text=Multiventas';
   const storeAccent = accentColor || product.store?.primaryColor || '#18181b';
+  const storeAccentText = contrastText(storeAccent);
 
   const add = useMutation({
     mutationFn: () => authApi('/cart', {
@@ -56,7 +57,7 @@ export function ProductCard({ product, accentColor }: { product: Product; accent
           <span className="text-xl font-black">{money(product.price, product.currency)}</span>
           <Button
             size="sm"
-            style={{ backgroundColor: storeAccent, color: '#fff' }}
+            style={{ backgroundColor: storeAccent, color: storeAccentText }}
             onClick={() => {
               if (!hasAuth()) { location.href = '/login'; return; }
               add.mutate();
