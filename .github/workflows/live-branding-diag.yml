@@ -34,3 +34,5 @@ jobs:
           wc -c /tmp/og
 
 # rerun after production redeploy trigger
+
+# second rerun after deployment wait
