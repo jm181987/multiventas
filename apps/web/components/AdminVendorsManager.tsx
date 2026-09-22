@@ -30,7 +30,8 @@ export function AdminVendorsManager() {
       method: 'PATCH',
       body: JSON.stringify({
         status,
-        kycStatus: status === 'APPROVED' ? 'VERIFIED' : status === 'REJECTED' ? 'REJECTED' : 'PENDING',
+        ...(status === 'APPROVED' ? { kycStatus: 'VERIFIED' } : {}),
+        ...(status === 'REJECTED' ? { kycStatus: 'REJECTED' } : {}),
       }),
     }),
     onSuccess: async () => {

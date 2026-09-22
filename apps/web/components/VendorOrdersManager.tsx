@@ -122,7 +122,7 @@ export function VendorOrdersManager() {
           ['Pagados', counters.paid, CheckCircle2],
           ['En camino', counters.shipped, Truck],
           ['Entregados', counters.delivered, PackageCheck],
-        ].map(([label, value, Icon]) => (
+        ] as const).map(([label, value, Icon]) => (
           <Card key={String(label)}>
             <CardContent className="flex items-center gap-4 pt-5">
               <div className="grid size-10 place-items-center rounded-lg bg-muted"><Icon className="size-5" /></div>
