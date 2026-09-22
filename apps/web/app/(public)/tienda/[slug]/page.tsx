@@ -20,13 +20,9 @@ export default async function StorePage({ params }: { params: { slug: string } }
       <section className="relative overflow-hidden border-b text-white" style={{ backgroundColor: accent }}>
         {store.coverUrl && <img src={store.coverUrl} alt="" className="absolute inset-0 h-full w-full object-cover" />}
         <div className="absolute inset-0 bg-black/45" />
-        <div className="relative mx-auto flex min-h-[320px] max-w-7xl flex-col justify-end gap-5 px-4 py-12 sm:flex-row sm:items-end sm:justify-start">
+        <div className="relative mx-auto flex min-h-[340px] max-w-7xl flex-col justify-end gap-5 px-4 py-12 sm:flex-row sm:items-end sm:justify-start">
           <div className="grid size-28 shrink-0 place-items-center overflow-hidden rounded-3xl border-4 border-white bg-white text-zinc-900 shadow-2xl">
-            {store.logoUrl ? (
-              <img src={store.logoUrl} alt={store.name} className="h-full w-full object-cover" />
-            ) : (
-              <Store className="size-12" />
-            )}
+            {store.logoUrl ? <img src={store.logoUrl} alt={store.name} className="h-full w-full object-cover" /> : <Store className="size-12" />}
           </div>
           <div className="min-w-0 pb-1">
             <div className="flex flex-wrap items-center gap-2">
@@ -39,10 +35,10 @@ export default async function StorePage({ params }: { params: { slug: string } }
         </div>
       </section>
 
-      <section className="border-b" style={{ borderColor: `${accent}33` }}>
+      <section className="border-b bg-white" style={{ borderColor: `${accent}33` }}>
         <div className="mx-auto flex max-w-7xl flex-wrap items-center gap-3 px-4 py-4">
-          <Link href={`/tienda/${store.slug}`} className="rounded-full px-4 py-2 text-sm font-semibold text-white" style={{ backgroundColor: accent }}>Productos</Link>
-          <span className="text-sm text-muted-foreground">Compra directamente en la tienda de {store.name}</span>
+          <Link href={`/tienda/${store.slug}`} className="rounded-full px-5 py-2 text-sm font-semibold text-white shadow-sm" style={{ backgroundColor: accent }}>Productos</Link>
+          <span className="text-sm text-muted-foreground">Compra directamente en {store.name}</span>
         </div>
       </section>
 
@@ -50,7 +46,7 @@ export default async function StorePage({ params }: { params: { slug: string } }
         <div className="mb-7 flex items-center gap-3">
           <span className="h-10 w-1.5 rounded-full" style={{ backgroundColor: accent }} />
           <div>
-            <h2 className="text-3xl font-black">Productos</h2>
+            <h2 className="text-3xl font-black">Productos de {store.name}</h2>
             <p className="text-sm text-muted-foreground">{store.products?.length ?? 0} disponibles</p>
           </div>
         </div>
