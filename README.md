@@ -79,9 +79,9 @@ Para carga media puede usarse el pool de Prisma con `connection_limit`. Para alt
 
 ## Dominio de producción
 
-La URL pública canónica es `https://sevende.knjpro.site`.
+La URL pública canónica es `https://www.sevende.knjpro.site`.
 
-En Coolify, el dominio debe apuntar al servicio `web`. El navegador usa el mismo origen para:
+En Coolify, `www.sevende.knjpro.site` debe apuntar al servicio `web`. El host `sevende.knjpro.site` se redirige permanentemente al dominio con `www`. El navegador usa el mismo origen para:
 - `/api/*` -> proxy interno al servicio NestJS.
 - `/media/*` -> proxy interno a MinIO.
 - callbacks y webhooks de Mercado Pago.
@@ -89,7 +89,7 @@ En Coolify, el dominio debe apuntar al servicio `web`. El navegador usa el mismo
 La variable recomendada es:
 
 ```env
-PUBLIC_ORIGIN=https://sevende.knjpro.site
+PUBLIC_ORIGIN=https://www.sevende.knjpro.site
 ```
 
 No es necesario exponer dominios públicos separados para API o MinIO.
