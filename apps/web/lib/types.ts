@@ -36,3 +36,19 @@ export type ProductSearch = {
   page: number;
   limit: number;
 };
+
+
+export type StoreSearch = {
+  items: Array<Store & {
+    productCount: number;
+    vendor?: { businessName?: string | null };
+    products?: Array<{
+      id: string;
+      title: string;
+      images?: Array<{ id?: string; url: string; alt?: string | null }>;
+    }>;
+  }>;
+  total: number;
+  page: number;
+  limit: number;
+};
