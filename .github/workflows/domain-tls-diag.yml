@@ -9,23 +9,27 @@ jobs:
   probe:
     runs-on: ubuntu-latest
     steps:
-      - name: Probe DNS and TLS
+      - name: Probe DNS TLS and mixed content
         shell: bash
         run: |
           set +e
-          echo "=== DNS WWW ==="
-          getent ahostsv4 www.sevende.knjpro.site
-          echo "=== DNS BARE ==="
-          getent ahostsv4 sevende.knjpro.site
+          echo "=== STRICT TLS WWW ==="
+          curl -vI --max-time 20 https://www.sevende.knjpro.site/ 2>&1
+          echo "STRICT_TLS_EXIT=$?"
 
-          echo "=== TLS WWW ==="
-          echo | openssl s_client -connect www.sevende.knjpro.site:443 -servername www.sevende.knjpro.site 2>&1 | openssl x509 -noout -subject -issuer -dates -ext subjectAltName
+          echo "=== STRICT TLS HEALTH ==="
+          curl -v --max-time 20 https://www.sevende.knjpro.site/api/health/ready 2>&1
+          echo "STRICT_HEALTH_EXIT=$?"
 
-          echo "=== CURL WWW ==="
-          curl -vkI --max-time 20 https://www.sevende.knjpro.site/ 2>&1
+          echo "=== PAGE HTML ==="
+          curl -fsSL --max-time 20 https://www.sevende.knjpro.site/ -o /tmp/home.html
+          echo "HOME_EXIT=$?"
 
-          echo "=== TLS BARE ==="
-          echo | openssl s_client -connect sevende.knjpro.site:443 -servername sevende.knjpro.site 2>&1 | openssl x509 -noout -subject -issuer -dates -ext subjectAltName
+          echo "=== HTTP REFERENCES ==="
+          grep -Eo 'http://[^"'"'"' <>) ]+' /tmp/home.html | sort -u || true
 
-          echo "=== CURL BARE ==="
-          curl -vkI --max-time 20 https://sevende.knjpro.site/ 2>&1
+          echo "=== HTTPS REFERENCES SAMPLE ==="
+          grep -Eo 'https://[^"'"'"' <>) ]+' /tmp/home.html | sort -u | head -50 || true
+
+          echo "=== CERTIFICATE ==="
+          echo | openssl s_client -connect www.sevende.knjpro.site:443 -servername www.sevende.knjpro.site 2>/dev/null | openssl x509 -noout -subject -issuer -dates -ext subjectAltName
