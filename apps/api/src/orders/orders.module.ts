@@ -213,13 +213,20 @@ class OrdersService {
 
     this.assertTransition(order.status, status);
 
+    const moved = await this.db.client.order.updateMany({
+      where: { id, tenantId, status: order.status },
+      data: { status },
+    });
+    if (moved.count !== 1) {
+      throw new BadRequestException('El pedido cambió de estado. Recarga e intenta nuevamente');
+    }
+
     if (status === OrderStatus.CANCELLED && order.status === OrderStatus.PENDING) {
       await this.restoreStock(order.items);
     }
 
-    const updated = await this.db.client.order.update({
+    const updated = await this.db.client.order.findUniqueOrThrow({
       where: { id },
-      data: { status },
       include: {
         items: {
           include: {
@@ -250,11 +257,18 @@ class OrdersService {
       throw new BadRequestException('Solo puedes cancelar un pedido pendiente de pago');
     }
 
+    const moved = await this.db.client.order.updateMany({
+      where: { id, buyerId: userId, status: OrderStatus.PENDING },
+      data: { status: OrderStatus.CANCELLED },
+    });
+    if (moved.count !== 1) {
+      throw new BadRequestException('El pedido ya cambió de estado. Recarga la página');
+    }
+
     await this.restoreStock(order.items);
 
-    const updated = await this.db.client.order.update({
+    const updated = await this.db.client.order.findUniqueOrThrow({
       where: { id },
-      data: { status: OrderStatus.CANCELLED },
       include: {
         items: {
           include: {
