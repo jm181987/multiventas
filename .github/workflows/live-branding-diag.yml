@@ -1,0 +1,34 @@
+name: Live Branding Diagnostic
+
+on:
+  push:
+    branches:
+      - diag/live-branding
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Probe live branding
+        shell: bash
+        run: |
+          set +e
+          echo "=== HOME HEADERS ==="
+          curl -sS -D /tmp/home.headers -o /tmp/home.html --max-time 20 https://www.sevende.knjpro.site/
+          cat /tmp/home.headers
+          echo "=== TITLE/META ==="
+          grep -Eo '<title>[^<]*|<meta[^>]+(description|og:title|og:description|og:image|twitter:card|twitter:title|twitter:description)[^>]*' /tmp/home.html || true
+          echo "=== LOGO REFERENCE ==="
+          grep -o 'knj-logo.webp' /tmp/home.html | head || true
+          echo "=== LOGO ==="
+          curl -sS -D - -o /tmp/logo --max-time 20 https://www.sevende.knjpro.site/knj-logo.webp
+          file /tmp/logo
+          wc -c /tmp/logo
+          echo "=== FAVICON ==="
+          curl -sS -D - -o /tmp/favicon --max-time 20 https://www.sevende.knjpro.site/favicon.ico
+          file /tmp/favicon
+          wc -c /tmp/favicon
+          echo "=== OG ==="
+          curl -sS -D - -o /tmp/og --max-time 20 https://www.sevende.knjpro.site/opengraph-image
+          file /tmp/og
+          wc -c /tmp/og
