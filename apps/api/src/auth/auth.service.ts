@@ -110,7 +110,9 @@ export class AuthService {
       where: { id: userId },
       include: { vendor: true },
     });
-    if (!user) throw new UnauthorizedException();
+    if (!user || user.deletedAt || user.status !== UserStatus.ACTIVE) {
+      throw new UnauthorizedException('Cuenta suspendida o inactiva');
+    }
 
     const payload = {
       sub: user.id,
