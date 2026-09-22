@@ -17,7 +17,7 @@ const rank: Record<Exclude<OrderStatus, 'CANCELLED'>, number> = {
 };
 
 export function OrderStatusTimeline({ status, accentColor = '#18181b' }: { status: OrderStatus; accentColor?: string | null }) {
-  const color = color || '#18181b';
+  const color = accentColor || '#18181b';
   if (status === 'CANCELLED') {
     return <div className="flex items-center gap-2 rounded-lg bg-red-50 p-3 text-sm font-semibold text-red-700"><XCircle className="size-4" /> Pedido cancelado</div>;
   }
