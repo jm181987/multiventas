@@ -33,10 +33,7 @@ export class MercadoPagoService {
   async getAuthorizationUrl(vendorId: string): Promise<string> {
     const marketplace = await this.getRuntimeMarketplaceConfig();
     const state = this.signState(vendorId);
-    const redirectUri = this.config.getOrThrow<string>('MP_REDIRECT_URI').trim();
-    if (!/^https:\/\//i.test(redirectUri) && !redirectUri.startsWith('http://localhost')) {
-      throw new BadRequestException('MP_REDIRECT_URI debe ser una URL HTTPS estática');
-    }
+    const redirectUri = this.getOAuthRedirectUri();
     const params = new URLSearchParams({
       client_id: marketplace.clientId,
       response_type: 'code',
@@ -59,7 +56,7 @@ export class MercadoPagoService {
       hasClientSecret: Boolean(saved?.clientSecretEncrypted || this.config.get('MP_CLIENT_SECRET')),
       feeRate: runtime.feeRate,
       source: saved ? 'database' : 'environment',
-      redirectUri: this.config.get('MP_REDIRECT_URI') ?? null,
+      redirectUri: this.getOAuthRedirectUri(),
       webhookUrl: this.config.get('MP_WEBHOOK_URL') ?? null,
     };
   }
@@ -114,7 +111,7 @@ export class MercadoPagoService {
     const token = await this.oauthTokenRequest({
       grant_type: 'authorization_code',
       code,
-      redirect_uri: this.config.getOrThrow('MP_REDIRECT_URI'),
+      redirect_uri: this.getOAuthRedirectUri(),
       state,
     });
     await this.db.client.oAuthToken.upsert({
@@ -156,7 +153,7 @@ export class MercadoPagoService {
       providerUserId: token?.providerUserId ?? null,
       updatedAt: token?.updatedAt ?? null,
       reconnectRequired: token ? token.expiresAt.getTime() <= Date.now() : false,
-      redirectUri: this.config.get('MP_REDIRECT_URI') ?? null,
+      redirectUri: this.getOAuthRedirectUri(),
     };
   }
 
@@ -451,6 +448,60 @@ export class MercadoPagoService {
       feeRate: saved ? Number(saved.feeRate) : Number(this.config.get('MP_MARKETPLACE_FEE_RATE') ?? '0.08'),
       accountEmail: saved?.accountEmail ?? null,
     };
+  }
+
+  private getOAuthRedirectUri() {
+    const configured = this.config.get<string>('MP_REDIRECT_URI')?.trim();
+    if (configured && this.isValidOAuthRedirect(configured)) {
+      return configured.replace(/\/$/, '');
+    }
+
+    const webPublic = this.config.get<string>('WEB_PUBLIC_URL')
+      ?.split(',')[0]
+      ?.trim();
+    const webBase = this.toOAuthHttpsBase(webPublic);
+    if (webBase) {
+      return `${webBase}/api/payments/mercadopago/callback`;
+    }
+
+    const apiPublic = this.config.get<string>('API_PUBLIC_URL')?.trim();
+    const apiBase = this.toOAuthHttpsBase(apiPublic);
+    if (apiBase) {
+      return `${apiBase}/api/payments/mercadopago/callback`;
+    }
+
+    throw new BadRequestException(
+      'Mercado Pago necesita una Redirect URL HTTPS fija. Configura WEB_PUBLIC_URL con tu dominio HTTPS o define MP_REDIRECT_URI explícitamente.',
+    );
+  }
+
+  private isValidOAuthRedirect(value: string) {
+    try {
+      const url = new URL(value);
+      const isLocal = url.hostname === 'localhost' || url.hostname === '127.0.0.1';
+      return (url.protocol === 'https:' || (isLocal && url.protocol === 'http:'))
+        && !url.search
+        && !url.hash;
+    } catch {
+      return false;
+    }
+  }
+
+  private toOAuthHttpsBase(value?: string) {
+    if (!value) return null;
+    try {
+      const url = new URL(value);
+      const isLocal = url.hostname === 'localhost' || url.hostname === '127.0.0.1';
+      if (!isLocal) url.protocol = 'https:';
+      if (!isLocal && url.protocol !== 'https:') return null;
+      if (isLocal && !['http:', 'https:'].includes(url.protocol)) return null;
+      url.search = '';
+      url.hash = '';
+      url.pathname = url.pathname.replace(/\/+$/, '');
+      return url.toString().replace(/\/$/, '');
+    } catch {
+      return null;
+    }
   }
 
   private signState(vendorId: string) {

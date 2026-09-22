@@ -138,6 +138,7 @@ export default function MercadoPagoPage() {
             <div className="rounded-xl border bg-muted/20 p-4">
               <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Redirect URL que debe estar configurada en Mercado Pago</p>
               <p className="mt-1 break-all text-sm font-medium">{status.redirectUri}</p>
+              <p className="mt-2 text-xs text-muted-foreground">Copia exactamente esta URL en Mercado Pago Developers → Tu aplicación → URLs de redireccionamiento. Debe coincidir carácter por carácter.</p>
             </div>
           )}
 
