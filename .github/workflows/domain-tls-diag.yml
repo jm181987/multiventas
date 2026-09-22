@@ -1,0 +1,31 @@
+name: Domain TLS Diagnostic
+
+on:
+  push:
+    branches:
+      - diag/www-tls
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Probe DNS and TLS
+        shell: bash
+        run: |
+          set +e
+          echo "=== DNS WWW ==="
+          getent ahostsv4 www.sevende.knjpro.site
+          echo "=== DNS BARE ==="
+          getent ahostsv4 sevende.knjpro.site
+
+          echo "=== TLS WWW ==="
+          echo | openssl s_client -connect www.sevende.knjpro.site:443 -servername www.sevende.knjpro.site 2>&1 | openssl x509 -noout -subject -issuer -dates -ext subjectAltName
+
+          echo "=== CURL WWW ==="
+          curl -vkI --max-time 20 https://www.sevende.knjpro.site/ 2>&1
+
+          echo "=== TLS BARE ==="
+          echo | openssl s_client -connect sevende.knjpro.site:443 -servername sevende.knjpro.site 2>&1 | openssl x509 -noout -subject -issuer -dates -ext subjectAltName
+
+          echo "=== CURL BARE ==="
+          curl -vkI --max-time 20 https://sevende.knjpro.site/ 2>&1
