@@ -1,12 +1,26 @@
-import { Controller, Get, Injectable, Module, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Injectable, Module, Patch, UseGuards } from '@nestjs/common';
+import { Type } from 'class-transformer';
+import { IsEmail, IsNumber, IsOptional, IsString, Max, Min } from 'class-validator';
 import { DbService } from '../common/db.service';
 import { Roles } from '../common/decorators';
 import { JwtAuthGuard, RolesGuard } from '../common/guards';
 import { ProductStatus, StoreStatus, UserRole, VendorStatus } from '@multiventas/db';
+import { PaymentsModule } from '../payments/payments.module';
+import { MercadoPagoService } from '../payments/mercado-pago.service';
+
+class MercadoPagoMarketplaceConfigDto {
+  @IsOptional() @IsEmail() accountEmail?: string;
+  @IsOptional() @IsString() clientId?: string;
+  @IsOptional() @IsString() clientSecret?: string;
+  @IsOptional() @Type(() => Number) @IsNumber() @Min(0) @Max(1) feeRate?: number;
+}
 
 @Injectable()
 class AdminService {
-  constructor(private readonly db: DbService) {}
+  constructor(
+    private readonly db: DbService,
+    private readonly mp: MercadoPagoService,
+  ) {}
 
   async dashboard() {
     const [
@@ -97,6 +111,14 @@ class AdminService {
       take: 500,
     });
   }
+
+  mercadoPagoConfig() {
+    return this.mp.getMarketplaceAdminConfig();
+  }
+
+  updateMercadoPagoConfig(dto: MercadoPagoMarketplaceConfigDto) {
+    return this.mp.updateMarketplaceAdminConfig(dto);
+  }
 }
 
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -113,7 +135,19 @@ class AdminController {
 
   @Get('commissions')
   commissions() { return this.admin.commissions(); }
+
+  @Get('mercadopago')
+  mercadoPagoConfig() { return this.admin.mercadoPagoConfig(); }
+
+  @Patch('mercadopago')
+  updateMercadoPagoConfig(@Body() dto: MercadoPagoMarketplaceConfigDto) {
+    return this.admin.updateMercadoPagoConfig(dto);
+  }
 }
 
-@Module({ controllers: [AdminController], providers: [AdminService] })
+@Module({
+  imports: [PaymentsModule],
+  controllers: [AdminController],
+  providers: [AdminService],
+})
 export class AdminModule {}
