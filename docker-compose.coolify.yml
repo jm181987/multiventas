@@ -20,7 +20,6 @@ services:
     environment:
       MINIO_ROOT_USER: ${MINIO_ROOT_USER:?}
       MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?}
-      SERVICE_URL_MINIO: /
     volumes:
       - minio_data:/data
     expose:
@@ -28,7 +27,6 @@ services:
       - "9001"
     networks:
       - default
-      - coolify
 
   minio-init:
     build:
@@ -85,12 +83,10 @@ services:
       S3_SECRET_KEY: ${MINIO_ROOT_PASSWORD:?}
       S3_FORCE_PATH_STYLE: "true"
       S3_PUBLIC_URL: https://www.sevende.knjpro.site/media
-      SERVICE_URL_API: /
     expose:
       - "80"
     networks:
       - default
-      - coolify
     depends_on:
       redis:
         condition: service_healthy
@@ -116,15 +112,26 @@ services:
     restart: unless-stopped
     environment:
       NODE_ENV: production
-      PORT: "3000"
+      PORT: "80"
       HOSTNAME: "0.0.0.0"
       NEXT_PUBLIC_API_URL: https://www.sevende.knjpro.site/api
       INTERNAL_API_URL: http://api:80/api
       S3_BUCKET: ${S3_BUCKET:-multiventas}
-      SERVICE_URL_WEB: /
     expose:
       - "80"
-      - "3000"
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=coolify"
+      - "traefik.http.services.multiventas-web.loadbalancer.server.port=80"
+      - "traefik.http.routers.multiventas-web-http.rule=Host(\`www.sevende.knjpro.site\`) || Host(\`sevende.knjpro.site\`)"
+      - "traefik.http.routers.multiventas-web-http.entrypoints=http"
+      - "traefik.http.routers.multiventas-web-http.middlewares=multiventas-force-https"
+      - "traefik.http.middlewares.multiventas-force-https.redirectscheme.scheme=https"
+      - "traefik.http.routers.multiventas-web-https.rule=Host(\`www.sevende.knjpro.site\`) || Host(\`sevende.knjpro.site\`)"
+      - "traefik.http.routers.multiventas-web-https.entrypoints=https"
+      - "traefik.http.routers.multiventas-web-https.tls=true"
+      - "traefik.http.routers.multiventas-web-https.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.multiventas-web-https.service=multiventas-web"
     networks:
       - default
       - coolify
