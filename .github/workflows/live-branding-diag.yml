@@ -32,3 +32,5 @@ jobs:
           curl -sS -D - -o /tmp/og --max-time 20 https://www.sevende.knjpro.site/opengraph-image
           file /tmp/og
           wc -c /tmp/og
+
+# rerun after production redeploy trigger
