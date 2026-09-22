@@ -13,7 +13,7 @@ export function SiteHeader() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const { user, loading, logout } = useAuthSession();
 
-  const links: Array<[string, string]> = [['/productos', 'Productos']];
+  const links: Array<[string, string]> = [['/productos', 'Productos'], ['/tiendas', 'Tiendas']];
   if (user) links.push(['/mis-pedidos', 'Mis pedidos']);
   if (user?.roles.includes('VENDOR')) links.push(['/vendor', 'Mi tienda']);
   else if (!user) links.push(['/registro?tipo=vendedor', 'Vender']);
