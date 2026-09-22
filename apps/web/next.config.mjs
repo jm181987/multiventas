@@ -3,6 +3,21 @@ const internalApi = (process.env.INTERNAL_API_URL ?? 'http://api:80/api').replac
 
 const nextConfig = {
   output: 'standalone',
+  async redirects() {
+    return [
+      {
+        source: '/:path*',
+        has: [
+          {
+            type: 'host',
+            value: 'sevende.knjpro.site',
+          },
+        ],
+        destination: 'https://www.sevende.knjpro.site/:path*',
+        permanent: true,
+      },
+    ];
+  },
   async rewrites() {
     return [
       {
