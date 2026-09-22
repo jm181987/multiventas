@@ -7,6 +7,7 @@ import { MercadoPagoService } from '../payments/mercado-pago.service';
 import { AuthUser, CurrentUser, Roles, SystemContext } from '../common/decorators';
 import { JwtAuthGuard, RolesGuard } from '../common/guards';
 import { OrderStatus, ProductStatus, UserRole } from '@multiventas/db';
+import { StorageService } from '../storage/storage.module';
 
 class CheckoutDto {
   @IsOptional() @IsObject() shippingAddress?: Record<string, unknown>;
@@ -23,7 +24,16 @@ class OrdersService {
     private readonly db: DbService,
     private readonly cart: CartService,
     private readonly mp: MercadoPagoService,
+    private readonly storage: StorageService,
   ) {}
+
+  private normalizeStore<T extends { logoUrl?: string | null; coverUrl?: string | null }>(store: T): T {
+    return {
+      ...store,
+      logoUrl: store.logoUrl ? this.storage.normalizeMediaUrl(store.logoUrl) : null,
+      coverUrl: store.coverUrl ? this.storage.normalizeMediaUrl(store.coverUrl) : null,
+    };
+  }
 
   async checkout(userId: string, dto: CheckoutDto) {
     const cart = await this.cart.get(userId);
@@ -93,29 +103,31 @@ class OrdersService {
     return { checkouts };
   }
 
-  buyerOrders(userId: string) {
-    return this.db.client.order.findMany({
+  async buyerOrders(userId: string) {
+    const orders = await this.db.client.order.findMany({
       where: { buyerId: userId },
       include: {
         items: true,
         payment: true,
-        store: { select: { id: true, slug: true, name: true, logoUrl: true, primaryColor: true } },
+        store: { select: { id: true, slug: true, name: true, logoUrl: true, coverUrl: true, primaryColor: true } },
       },
       orderBy: { createdAt: 'desc' },
     });
+    return orders.map((order) => ({ ...order, store: this.normalizeStore(order.store) }));
   }
 
-  vendorOrders(tenantId: string) {
-    return this.db.client.order.findMany({
+  async vendorOrders(tenantId: string) {
+    const orders = await this.db.client.order.findMany({
       where: { tenantId },
       include: {
         items: true,
         payment: true,
-        store: { select: { id: true, slug: true, name: true } },
+        store: { select: { id: true, slug: true, name: true, logoUrl: true, coverUrl: true, primaryColor: true } },
         buyer: { select: { id: true, name: true, email: true, phone: true } },
       },
       orderBy: { createdAt: 'desc' },
     });
+    return orders.map((order) => ({ ...order, store: this.normalizeStore(order.store) }));
   }
 
   private assertTransition(current: OrderStatus, next: OrderStatus) {
@@ -152,16 +164,17 @@ class OrdersService {
       await this.restoreStock(order.items);
     }
 
-    return this.db.client.order.update({
+    const updated = await this.db.client.order.update({
       where: { id },
       data: { status },
       include: {
         items: true,
         payment: true,
-        store: { select: { id: true, slug: true, name: true } },
+        store: { select: { id: true, slug: true, name: true, logoUrl: true, coverUrl: true, primaryColor: true } },
         buyer: { select: { id: true, name: true, email: true, phone: true } },
       },
     });
+    return { ...updated, store: this.normalizeStore(updated.store) };
   }
 
   async cancelBuyerOrder(userId: string, id: string) {
@@ -176,15 +189,16 @@ class OrdersService {
 
     await this.restoreStock(order.items);
 
-    return this.db.client.order.update({
+    const updated = await this.db.client.order.update({
       where: { id },
       data: { status: OrderStatus.CANCELLED },
       include: {
         items: true,
         payment: true,
-        store: { select: { id: true, slug: true, name: true, logoUrl: true, primaryColor: true } },
+        store: { select: { id: true, slug: true, name: true, logoUrl: true, coverUrl: true, primaryColor: true } },
       },
     });
+    return { ...updated, store: this.normalizeStore(updated.store) };
   }
 }
 

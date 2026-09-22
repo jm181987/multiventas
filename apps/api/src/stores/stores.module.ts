@@ -1,10 +1,11 @@
-import { BadRequestException, Body, Controller, Get, Injectable, Module, Param, Patch, Post, UploadedFile, UseGuards, UseInterceptors } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Get, Injectable, Module, Param, Patch, Post, Query, UploadedFile, UseGuards, UseInterceptors } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
-import { IsHexColor, IsIn, IsOptional, IsString } from 'class-validator';
+import { Type } from 'class-transformer';
+import { IsHexColor, IsIn, IsInt, IsOptional, IsString, Max, Min } from 'class-validator';
 import { DbService } from '../common/db.service';
 import { AuthUser, CurrentUser, Roles } from '../common/decorators';
 import { JwtAuthGuard, RolesGuard } from '../common/guards';
-import { StoreStatus, UserRole } from '@multiventas/db';
+import { ProductStatus, StoreStatus, UserRole, VendorStatus } from '@multiventas/db';
 import { StorageService } from '../storage/storage.module';
 
 class StoreDto {
@@ -23,6 +24,12 @@ class StoreUpdateDto {
   @IsOptional() @IsString() coverUrl?: string | null;
   @IsOptional() @IsHexColor() primaryColor?: string | null;
   @IsOptional() @IsIn([StoreStatus.DRAFT, StoreStatus.ACTIVE, StoreStatus.SUSPENDED]) status?: StoreStatus;
+}
+
+class StoreQueryDto {
+  @IsOptional() @IsString() q?: string;
+  @IsOptional() @Type(() => Number) @IsInt() @Min(1) page = 1;
+  @IsOptional() @Type(() => Number) @IsInt() @Min(1) @Max(24) limit = 12;
 }
 
 @Injectable()
@@ -49,18 +56,83 @@ class StoresService {
     return normalized as T;
   }
 
+  async publicList(query: StoreQueryDto) {
+    const where: any = {
+      status: StoreStatus.ACTIVE,
+      deletedAt: null,
+      vendor: {
+        status: VendorStatus.APPROVED,
+        deletedAt: null,
+      },
+      ...(query.q ? {
+        OR: [
+          { name: { contains: query.q, mode: 'insensitive' } },
+          { description: { contains: query.q, mode: 'insensitive' } },
+          { vendor: { businessName: { contains: query.q, mode: 'insensitive' } } },
+        ],
+      } : {}),
+    };
+
+    const [stores, total] = await Promise.all([
+      this.db.client.store.findMany({
+        where,
+        include: {
+          vendor: { select: { businessName: true } },
+          products: {
+            where: { status: ProductStatus.ACTIVE, deletedAt: null },
+            include: { images: { orderBy: { sortOrder: 'asc' }, take: 1 } },
+            orderBy: { createdAt: 'desc' },
+            take: 4,
+          },
+          _count: {
+            select: {
+              products: {
+                where: { status: ProductStatus.ACTIVE, deletedAt: null },
+              },
+            },
+          },
+        },
+        orderBy: [{ updatedAt: 'desc' }, { createdAt: 'desc' }],
+        skip: (query.page - 1) * query.limit,
+        take: query.limit,
+      }),
+      this.db.client.store.count({ where }),
+    ]);
+
+    return {
+      items: stores.map((store: any) => this.normalizeStore({
+        ...store,
+        productCount: store._count.products,
+      })),
+      total,
+      page: query.page,
+      limit: query.limit,
+    };
+  }
+
   async publicBySlug(slug: string) {
     const store = await this.db.client.store.findFirst({
-      where: { slug, status: StoreStatus.ACTIVE, deletedAt: null },
+      where: {
+        slug,
+        status: StoreStatus.ACTIVE,
+        deletedAt: null,
+        vendor: { status: VendorStatus.APPROVED, deletedAt: null },
+      },
       include: {
-        products: {
-          where: { status: 'ACTIVE', deletedAt: null },
-          include: { images: { orderBy: { sortOrder: 'asc' }, take: 1 }, store: true },
-          take: 24,
+        vendor: { select: { businessName: true } },
+        _count: {
+          select: {
+            products: {
+              where: { status: ProductStatus.ACTIVE, deletedAt: null },
+            },
+          },
         },
       },
     });
-    return store ? this.normalizeStore(store) : null;
+    return store ? this.normalizeStore({
+      ...store,
+      productCount: store._count.products,
+    }) : null;
   }
 
   async mine() {
@@ -118,6 +190,10 @@ class StoresService {
 @Controller('stores')
 class PublicStoresController {
   constructor(private readonly stores: StoresService) {}
+
+  @Get()
+  list(@Query() query: StoreQueryDto) { return this.stores.publicList(query); }
+
   @Get(':slug')
   bySlug(@Param('slug') slug: string) { return this.stores.publicBySlug(slug); }
 }

@@ -164,7 +164,13 @@ public_vendor_products=$(request GET '/products?q=CI%20Product%20Updated') || fa
 echo "$public_vendor_products" | jq -e --arg id "$vendor_product_id" 'any(.items[]; .id == $id and .status == "ACTIVE")' >/dev/null || fail "published vendor product is not visible publicly"
 
 public_store=$(request GET /stores/ci-store) || fail "public branded store after publish"
-echo "$public_store" | jq -e --arg id "$vendor_product_id" '.primaryColor == "#112233" and any(.products[]; .id == $id and .store.name == "CI Store Branded")' >/dev/null || fail "branded storefront product data invalid"
+echo "$public_store" | jq -e '.primaryColor == "#112233" and .productCount >= 1' >/dev/null || fail "branded storefront metadata invalid"
+
+public_stores=$(request GET '/stores?limit=20') || fail "public stores directory"
+echo "$public_stores" | jq -e 'any(.items[]; .slug == "ci-store" and .name == "CI Store Branded" and .productCount >= 1)' >/dev/null || fail "published vendor store missing from store directory"
+
+store_products=$(request GET '/products?store=ci-store&limit=24') || fail "public store product catalog"
+echo "$store_products" | jq -e --arg id "$vendor_product_id" '.total >= 1 and any(.items[]; .id == $id and .store.slug == "ci-store")' >/dev/null || fail "published product missing from seller storefront"
 
 request DELETE "/vendor/products/$vendor_product_id/images/$vendor_image_id" "$vendor_access" >/tmp/vendor-product-image-delete.json || fail "vendor product image delete"
 
