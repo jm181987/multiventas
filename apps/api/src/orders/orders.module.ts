@@ -96,20 +96,95 @@ class OrdersService {
   buyerOrders(userId: string) {
     return this.db.client.order.findMany({
       where: { buyerId: userId },
-      include: { items: true, payment: true, store: true },
+      include: {
+        items: true,
+        payment: true,
+        store: { select: { id: true, slug: true, name: true, logoUrl: true, primaryColor: true } },
+      },
       orderBy: { createdAt: 'desc' },
     });
   }
 
-  vendorOrders() {
+  vendorOrders(tenantId: string) {
     return this.db.client.order.findMany({
-      include: { items: true, payment: true, buyer: { select: { id: true, name: true, email: true } } },
+      where: { tenantId },
+      include: {
+        items: true,
+        payment: true,
+        store: { select: { id: true, slug: true, name: true } },
+        buyer: { select: { id: true, name: true, email: true, phone: true } },
+      },
       orderBy: { createdAt: 'desc' },
     });
   }
 
-  updateStatus(id: string, status: OrderStatus) {
-    return this.db.client.order.update({ where: { id }, data: { status } });
+  private assertTransition(current: OrderStatus, next: OrderStatus) {
+    const allowed: Partial<Record<OrderStatus, OrderStatus[]>> = {
+      [OrderStatus.PENDING]: [OrderStatus.CANCELLED],
+      [OrderStatus.PAID]: [OrderStatus.SHIPPED],
+      [OrderStatus.SHIPPED]: [OrderStatus.DELIVERED],
+    };
+    if (!(allowed[current] ?? []).includes(next)) {
+      throw new BadRequestException(`No se puede cambiar un pedido de ${current} a ${next}`);
+    }
+  }
+
+  private async restoreStock(items: Array<{ productId: string | null; quantity: number }>) {
+    for (const item of items) {
+      if (!item.productId) continue;
+      await this.db.client.product.update({
+        where: { id: item.productId },
+        data: { stock: { increment: item.quantity } },
+      });
+    }
+  }
+
+  async updateVendorStatus(tenantId: string, id: string, status: OrderStatus) {
+    const order = await this.db.client.order.findFirst({
+      where: { id, tenantId },
+      include: { items: true },
+    });
+    if (!order) throw new BadRequestException('Pedido inválido');
+
+    this.assertTransition(order.status, status);
+
+    if (status === OrderStatus.CANCELLED && order.status === OrderStatus.PENDING) {
+      await this.restoreStock(order.items);
+    }
+
+    return this.db.client.order.update({
+      where: { id },
+      data: { status },
+      include: {
+        items: true,
+        payment: true,
+        store: { select: { id: true, slug: true, name: true } },
+        buyer: { select: { id: true, name: true, email: true, phone: true } },
+      },
+    });
+  }
+
+  async cancelBuyerOrder(userId: string, id: string) {
+    const order = await this.db.client.order.findFirst({
+      where: { id, buyerId: userId },
+      include: { items: true },
+    });
+    if (!order) throw new BadRequestException('Pedido inválido');
+    if (order.status !== OrderStatus.PENDING) {
+      throw new BadRequestException('Solo puedes cancelar un pedido pendiente de pago');
+    }
+
+    await this.restoreStock(order.items);
+
+    return this.db.client.order.update({
+      where: { id },
+      data: { status: OrderStatus.CANCELLED },
+      include: {
+        items: true,
+        payment: true,
+        store: { select: { id: true, slug: true, name: true, logoUrl: true, primaryColor: true } },
+      },
+    });
   }
 }
 
@@ -128,6 +203,11 @@ class BuyerOrdersController {
   mine(@CurrentUser() user: AuthUser) {
     return this.orders.buyerOrders(user.sub);
   }
+
+  @Patch(':id/cancel')
+  cancel(@CurrentUser() user: AuthUser, @Param('id') id: string) {
+    return this.orders.cancelBuyerOrder(user.sub, id);
+  }
 }
 
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -135,9 +215,15 @@ class BuyerOrdersController {
 @Controller('vendor/orders')
 class VendorOrdersController {
   constructor(private readonly orders: OrdersService) {}
-  @Get() list() { return this.orders.vendorOrders(); }
-  @Patch(':id/status') update(@Param('id') id: string, @Body() dto: OrderStatusDto) {
-    return this.orders.updateStatus(id, dto.status);
+
+  @Get()
+  list(@CurrentUser() user: AuthUser) {
+    return this.orders.vendorOrders(user.tenantId!);
+  }
+
+  @Patch(':id/status')
+  update(@CurrentUser() user: AuthUser, @Param('id') id: string, @Body() dto: OrderStatusDto) {
+    return this.orders.updateVendorStatus(user.tenantId!, id, dto.status);
   }
 }
 

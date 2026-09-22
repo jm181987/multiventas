@@ -55,7 +55,7 @@ class StoresService {
       include: {
         products: {
           where: { status: 'ACTIVE', deletedAt: null },
-          include: { images: { orderBy: { sortOrder: 'asc' }, take: 1 } },
+          include: { images: { orderBy: { sortOrder: 'asc' }, take: 1 }, store: true },
           take: 24,
         },
       },
