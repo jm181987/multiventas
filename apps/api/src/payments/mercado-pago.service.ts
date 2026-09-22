@@ -423,7 +423,11 @@ export class MercadoPagoService {
         ...(init.headers ?? {}),
       },
     });
-    if (!response.ok) throw new BadGatewayException(`Mercado Pago API: ${response.status} ${await response.text()}`);
+    if (!response.ok) {
+      const detail = await response.text();
+      console.error('Mercado Pago API error', path, response.status, detail);
+      throw new BadGatewayException(`Mercado Pago rechazó la operación (HTTP ${response.status})`);
+    }
     return response.json() as Promise<T>;
   }
 
