@@ -35,6 +35,28 @@ class OrdersService {
     };
   }
 
+  private normalizeOrder<T>(order: T): T {
+    const value = order as any;
+    return {
+      ...value,
+      store: value.store ? this.normalizeStore(value.store) : value.store,
+      buyer: value.buyer ? {
+        ...value.buyer,
+        avatarUrl: value.buyer.avatarUrl ? this.storage.normalizeMediaUrl(value.buyer.avatarUrl) : null,
+      } : value.buyer,
+      items: (value.items ?? []).map((item: any) => ({
+        ...item,
+        product: item.product ? {
+          ...item.product,
+          images: (item.product.images ?? []).map((image: any) => ({
+            ...image,
+            url: this.storage.normalizeProductImageUrl(image.url),
+          })),
+        } : null,
+      })),
+    } as T;
+  }
+
   async checkout(userId: string, dto: CheckoutDto) {
     const cart = await this.cart.get(userId);
     if (!cart.length) throw new BadRequestException('El carrito está vacío');
@@ -107,27 +129,47 @@ class OrdersService {
     const orders = await this.db.client.order.findMany({
       where: { buyerId: userId },
       include: {
-        items: true,
+        items: {
+          include: {
+            product: {
+              select: {
+                id: true,
+                slug: true,
+                images: { orderBy: { sortOrder: 'asc' }, take: 1 },
+              },
+            },
+          },
+        },
         payment: true,
         store: { select: { id: true, slug: true, name: true, logoUrl: true, coverUrl: true, primaryColor: true } },
       },
       orderBy: { createdAt: 'desc' },
     });
-    return orders.map((order) => ({ ...order, store: this.normalizeStore(order.store) }));
+    return orders.map((order) => this.normalizeOrder(order));
   }
 
   async vendorOrders(tenantId: string) {
     const orders = await this.db.client.order.findMany({
       where: { tenantId },
       include: {
-        items: true,
+        items: {
+          include: {
+            product: {
+              select: {
+                id: true,
+                slug: true,
+                images: { orderBy: { sortOrder: 'asc' }, take: 1 },
+              },
+            },
+          },
+        },
         payment: true,
         store: { select: { id: true, slug: true, name: true, logoUrl: true, coverUrl: true, primaryColor: true } },
-        buyer: { select: { id: true, name: true, email: true, phone: true } },
+        buyer: { select: { id: true, name: true, email: true, phone: true, avatarUrl: true } },
       },
       orderBy: { createdAt: 'desc' },
     });
-    return orders.map((order) => ({ ...order, store: this.normalizeStore(order.store) }));
+    return orders.map((order) => this.normalizeOrder(order));
   }
 
   private assertTransition(current: OrderStatus, next: OrderStatus) {
@@ -168,13 +210,23 @@ class OrdersService {
       where: { id },
       data: { status },
       include: {
-        items: true,
+        items: {
+          include: {
+            product: {
+              select: {
+                id: true,
+                slug: true,
+                images: { orderBy: { sortOrder: 'asc' }, take: 1 },
+              },
+            },
+          },
+        },
         payment: true,
         store: { select: { id: true, slug: true, name: true, logoUrl: true, coverUrl: true, primaryColor: true } },
-        buyer: { select: { id: true, name: true, email: true, phone: true } },
+        buyer: { select: { id: true, name: true, email: true, phone: true, avatarUrl: true } },
       },
     });
-    return { ...updated, store: this.normalizeStore(updated.store) };
+    return this.normalizeOrder(updated);
   }
 
   async cancelBuyerOrder(userId: string, id: string) {
@@ -193,12 +245,22 @@ class OrdersService {
       where: { id },
       data: { status: OrderStatus.CANCELLED },
       include: {
-        items: true,
+        items: {
+          include: {
+            product: {
+              select: {
+                id: true,
+                slug: true,
+                images: { orderBy: { sortOrder: 'asc' }, take: 1 },
+              },
+            },
+          },
+        },
         payment: true,
         store: { select: { id: true, slug: true, name: true, logoUrl: true, coverUrl: true, primaryColor: true } },
       },
     });
-    return { ...updated, store: this.normalizeStore(updated.store) };
+    return this.normalizeOrder(updated);
   }
 }
 
