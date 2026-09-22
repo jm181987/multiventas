@@ -14,6 +14,7 @@ export default async function StorePage({ params }: { params: { slug: string } }
   if (!store) notFound();
 
   const accent = store.primaryColor || '#18181b';
+  const accentText = contrastText(accent);
 
   return (
     <main>

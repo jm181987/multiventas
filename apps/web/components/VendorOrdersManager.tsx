@@ -4,7 +4,7 @@ import { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Banknote, CheckCircle2, Clock3, PackageCheck, Search, ShoppingBag, Truck, XCircle } from 'lucide-react';
 import { authApi } from '@/lib/api';
-import { money } from '@/lib/utils';
+import { contrastText, money } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
@@ -200,6 +200,7 @@ export function VendorOrdersManager() {
                             size="sm"
                             variant={action.status === 'CANCELLED' ? 'outline' : 'default'}
                             className={action.status === 'CANCELLED' ? 'text-red-600' : ''}
+                            style={action.status === 'CANCELLED' ? undefined : { backgroundColor: accent, color: contrastText(accent) }}
                             disabled={update.isPending}
                             onClick={() => {
                               if (action.status === 'CANCELLED' && !confirm('¿Cancelar este pedido? El stock reservado será devuelto.')) return;
