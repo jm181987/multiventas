@@ -1,10 +1,17 @@
 'use client';
 
-import { FormEvent, useState } from 'react';
+import { FormEvent, useEffect, useState } from 'react';
+import { ShieldCheck } from 'lucide-react';
 import { authApi } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
+
+declare global {
+  interface Window {
+    MP_DEVICE_SESSION_ID?: string;
+  }
+}
 
 type CheckoutResult = {
   checkouts: Array<{
@@ -19,6 +26,36 @@ export function CheckoutForm() {
   const [result, setResult] = useState<CheckoutResult>();
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [deviceId, setDeviceId] = useState('');
+
+  useEffect(() => {
+    let attempts = 0;
+    const readDeviceId = () => {
+      if (window.MP_DEVICE_SESSION_ID) {
+        setDeviceId(window.MP_DEVICE_SESSION_ID);
+        return true;
+      }
+      return false;
+    };
+
+    if (!document.querySelector('script[data-mp-security="checkout"]')) {
+      const script = document.createElement('script');
+      script.src = 'https://www.mercadopago.com/v2/security.js';
+      script.async = true;
+      script.setAttribute('view', 'checkout');
+      script.dataset.mpSecurity = 'checkout';
+      script.onload = () => readDeviceId();
+      document.head.appendChild(script);
+    }
+
+    readDeviceId();
+    const timer = window.setInterval(() => {
+      attempts += 1;
+      if (readDeviceId() || attempts >= 20) window.clearInterval(timer);
+    }, 250);
+
+    return () => window.clearInterval(timer);
+  }, []);
 
   async function submit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -36,6 +73,7 @@ export function CheckoutForm() {
             postalCode: form.get('postalCode'),
           },
           notes: form.get('notes'),
+          deviceId: deviceId || undefined,
         }),
       });
       setResult(data);
@@ -66,9 +104,21 @@ export function CheckoutForm() {
   return (
     <form onSubmit={submit} className="grid gap-4">
       <Input name="address" placeholder="Dirección" required />
-      <div className="grid gap-4 sm:grid-cols-2"><Input name="city" placeholder="Ciudad" required /><Input name="department" placeholder="Departamento" required /></div>
+      <div className="grid gap-4 sm:grid-cols-2">
+        <Input name="city" placeholder="Ciudad" required />
+        <Input name="department" placeholder="Departamento" required />
+      </div>
       <Input name="postalCode" placeholder="Código postal" />
       <Input name="notes" placeholder="Notas de entrega" />
+
+      <div className="flex items-start gap-2 rounded-lg border bg-muted/20 p-3 text-xs text-muted-foreground">
+        <ShieldCheck className="mt-0.5 size-4 shrink-0 text-emerald-600" />
+        <p>
+          Pago seguro: los datos de tarjeta se ingresan directamente en Mercado Pago y nunca pasan por Multiventas.
+          {deviceId ? ' Protección antifraude del dispositivo activa.' : ' Preparando protección antifraude…'}
+        </p>
+      </div>
+
       {error && <p className="text-sm text-red-600">{error}</p>}
       <Button size="lg" disabled={loading}>{loading ? 'Preparando pago…' : 'Pagar con Mercado Pago'}</Button>
     </form>
