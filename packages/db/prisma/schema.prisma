@@ -236,6 +236,7 @@ model Product {
   reviews     Review[]
   deliveryOptions ProductDeliveryOption[]
   favorites       Favorite[]
+  analytics        ProductAnalyticsDaily[]
 
   @@unique([storeId, slug])
   @@unique([storeId, sku])
@@ -456,6 +457,24 @@ model AuditLog {
   @@map("audit_logs")
 }
 
+
+model ProductAnalyticsDaily {
+  id           String   @id @default(uuid()) @db.Uuid
+  tenantId     String   @map("tenant_id") @db.Uuid
+  productId    String   @map("product_id") @db.Uuid
+  date         DateTime @db.Date
+  views        Int      @default(0)
+  cartAdds     Int      @default(0) @map("cart_adds")
+  favoriteAdds Int      @default(0) @map("favorite_adds")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+  product      Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@unique([productId, date])
+  @@index([tenantId, date])
+  @@index([tenantId, productId, date])
+  @@map("product_analytics_daily")
+}
 
 model Favorite {
   id        String   @id @default(uuid()) @db.Uuid
