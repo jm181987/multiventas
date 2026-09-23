@@ -17,6 +17,10 @@ class CheckoutDto {
   @IsOptional() @IsString() @MaxLength(80) couponCode?: string;
 }
 
+class CheckoutPreviewDto {
+  @IsOptional() @IsString() @MaxLength(80) couponCode?: string;
+}
+
 class OrderStatusDto {
   @IsIn([OrderStatus.SHIPPED, OrderStatus.DELIVERED, OrderStatus.CANCELLED]) status!: OrderStatus;
 }
@@ -67,6 +71,53 @@ class OrdersService {
         } : null,
       })),
     } as T;
+  }
+
+  async preview(userId: string, couponCode?: string) {
+    const cart = await this.cart.get(userId);
+    if (!cart.length) throw new BadRequestException('El carrito está vacío');
+
+    const products = await this.db.client.product.findMany({
+      where: { id: { in: cart.map((x) => x.productId) }, status: ProductStatus.ACTIVE, deletedAt: null },
+      include: { store: true },
+    });
+    if (products.length !== cart.length) throw new BadRequestException('Hay productos no disponibles');
+
+    const grouped = new Map<string, { storeId: string; storeName: string; rows: Array<{ product: any; quantity: number }> }>();
+    for (const item of cart) {
+      const product = products.find((p) => p.id === item.productId)!;
+      const group = grouped.get(product.storeId) ?? { storeId: product.storeId, storeName: product.store.name, rows: [] };
+      group.rows.push({ product, quantity: item.quantity });
+      grouped.set(product.storeId, group);
+    }
+
+    let matched = false;
+    const groups = [];
+    for (const group of grouped.values()) {
+      const subtotal = Math.round(group.rows.reduce((sum, row) => sum + Number(row.product.price) * row.quantity, 0) * 100) / 100;
+      const applied = couponCode ? await this.promotions.applicable(group.storeId, couponCode, subtotal) : null;
+      if (applied) matched = true;
+      const discountAmount = applied?.discount ?? 0;
+      groups.push({
+        storeId: group.storeId,
+        storeName: group.storeName,
+        subtotal,
+        discountAmount,
+        total: Math.round((subtotal - discountAmount) * 100) / 100,
+        couponCode: applied?.code ?? null,
+      });
+    }
+
+    if (couponCode && !matched) {
+      throw new BadRequestException('El cupón no es válido para los productos de este carrito');
+    }
+
+    return {
+      groups,
+      subtotal: Math.round(groups.reduce((sum, group) => sum + group.subtotal, 0) * 100) / 100,
+      discountAmount: Math.round(groups.reduce((sum, group) => sum + group.discountAmount, 0) * 100) / 100,
+      total: Math.round(groups.reduce((sum, group) => sum + group.total, 0) * 100) / 100,
+    };
   }
 
   async checkout(userId: string, dto: CheckoutDto) {
@@ -317,6 +368,12 @@ class OrdersService {
 @Controller('orders')
 class BuyerOrdersController {
   constructor(private readonly orders: OrdersService) {}
+
+  @SystemContext()
+  @Post('checkout/preview')
+  preview(@CurrentUser() user: AuthUser, @Body() dto: CheckoutPreviewDto) {
+    return this.orders.preview(user.sub, dto.couponCode);
+  }
 
   @SystemContext()
   @Post('checkout')
