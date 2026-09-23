@@ -224,6 +224,15 @@ class OrdersService {
                 images: { orderBy: { sortOrder: 'asc' }, take: 1 },
               },
             },
+            review: {
+              select: {
+                id: true,
+                rating: true,
+                comment: true,
+                status: true,
+                createdAt: true,
+              },
+            },
           },
         },
         payment: true,
