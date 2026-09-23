@@ -18,6 +18,7 @@ import { CommissionsModule } from './commissions/commissions.module';
 import { AdminModule } from './admin/admin.module';
 import { StorageModule } from './storage/storage.module';
 import { HealthModule } from './health/health.module';
+import { PromotionsModule } from './promotions/promotions.module';
 
 @Module({
   imports: [
@@ -36,6 +37,7 @@ import { HealthModule } from './health/health.module';
     OrdersModule,
     WebhooksModule,
     CommissionsModule,
+    PromotionsModule,
     AdminModule,
     HealthModule,
   ],
