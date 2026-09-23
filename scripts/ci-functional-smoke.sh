@@ -137,7 +137,7 @@ store_id=$(echo "$vendor_stores" | jq -r '.[0].id // empty')
 [ -n "$store_id" ] || fail "vendor store missing"
 echo "$vendor_stores" | jq -e 'length == 1 and .[0].slug == "ci-store"' >/dev/null || fail "tenant store isolation failed"
 
-vendor_product_body=$(jq -cn --arg storeId "$store_id" '{storeId:$storeId,slug:"ci-product",sku:"CI-001",title:"CI Product",price:999,stock:5}')
+vendor_product_body=$(jq -cn --arg storeId "$store_id" '{storeId:$storeId,slug:"ci-product",sku:"CI-001",title:"CI Product",price:999,stock:5,deliveryOptions:[{type:"PICKUP",fee:0,details:"Retiro CI 123"}]}')
 request POST /vendor/products "$vendor_access" "$vendor_product_body" >/tmp/vendor-product.json || fail "vendor product create"
 vendor_product_id=$(jq -r '.id // empty' /tmp/vendor-product.json)
 [ -n "$vendor_product_id" ] || fail "created vendor product id missing"
@@ -183,18 +183,18 @@ echo "$buyer_orders" | jq -e 'type == "array"' >/dev/null || fail "buyer orders 
 vendor_orders=$(request GET /vendor/orders "$vendor_access") || fail "vendor orders"
 echo "$vendor_orders" | jq -e 'type == "array"' >/dev/null || fail "vendor orders invalid"
 
-request PATCH "/vendor/products/$vendor_product_id" "$vendor_access" '{"title":"CI Product Updated","price":1299,"stock":8,"status":"ACTIVE"}' >/tmp/vendor-product-update.json || fail "vendor product update"
-jq -e '.title == "CI Product Updated" and (.price|tonumber) == 1299 and .stock == 8 and .status == "ACTIVE"' /tmp/vendor-product-update.json >/dev/null || fail "vendor product update not persisted"
+request PATCH "/vendor/products/$vendor_product_id" "$vendor_access" '{"title":"CI Product Updated","price":1299,"stock":8,"status":"ACTIVE","deliveryOptions":[{"type":"SHIPPING_PAID","fee":200,"details":"Montevideo"},{"type":"PICKUP","fee":0,"details":"Retiro CI 123"}]}' >/tmp/vendor-product-update.json || fail "vendor product update"
+jq -e '.title == "CI Product Updated" and (.price|tonumber) == 1299 and .stock == 8 and .status == "ACTIVE" and (.deliveryOptions|length) == 2 and any(.deliveryOptions[]; .type == "SHIPPING_PAID" and (.fee|tonumber) == 200)' /tmp/vendor-product-update.json >/dev/null || fail "vendor product update or delivery options not persisted"
 
 request POST "/vendor/products/$vendor_product_id/images" "$vendor_access" '{"url":"https://example.com/ci-product.jpg","alt":"CI Product"}' >/tmp/vendor-product-image.json || fail "vendor product image add"
 vendor_image_id=$(jq -r '.id // empty' /tmp/vendor-product-image.json)
 [ -n "$vendor_image_id" ] || fail "vendor product image id missing"
 
 vendor_products=$(request GET /vendor/products "$vendor_access") || fail "vendor products"
-echo "$vendor_products" | jq -e 'length == 1 and .[0].slug == "ci-product" and .[0].status == "ACTIVE" and .[0].stock == 8 and (. [0].images | length) == 1' >/dev/null || fail "tenant product management failed"
+echo "$vendor_products" | jq -e 'length == 1 and .[0].slug == "ci-product" and .[0].status == "ACTIVE" and .[0].stock == 8 and (.[0].images | length) == 1 and (.[0].deliveryOptions | length) == 2' >/dev/null || fail "tenant product management failed"
 
 public_vendor_products=$(request GET '/products?q=CI%20Product%20Updated') || fail "public vendor product search"
-echo "$public_vendor_products" | jq -e --arg id "$vendor_product_id" 'any(.items[]; .id == $id and .status == "ACTIVE")' >/dev/null || fail "published vendor product is not visible publicly"
+echo "$public_vendor_products" | jq -e --arg id "$vendor_product_id" 'any(.items[]; .id == $id and .status == "ACTIVE" and (.deliveryOptions|length) == 2)' >/dev/null || fail "published vendor product or delivery methods are not visible publicly"
 
 public_store=$(request GET /stores/ci-store) || fail "public branded store after publish"
 echo "$public_store" | jq -e '.primaryColor == "#112233" and .productCount >= 1' >/dev/null || fail "branded storefront metadata invalid"
@@ -219,8 +219,13 @@ echo "$promotions" | jq -e 'any(.[]; .code == "CI10" and (.value|tonumber) == 10
 cart_add_body=$(jq -cn --arg id "$vendor_product_id" '{productId:$id,quantity:1}')
 request POST /cart "$buyer_access" "$cart_add_body" >/tmp/cart-promo-add.json || fail "promo cart add"
 
-coupon_preview=$(request POST /orders/checkout/preview "$buyer_access" '{"couponCode":"CI10"}') || fail "coupon checkout preview"
-echo "$coupon_preview" | jq -e '.discountAmount == 129.9 and .total == 1169.1 and any(.groups[]; .couponCode == "CI10")' >/dev/null || fail "coupon discount preview invalid"
+pickup_preview_body=$(jq -cn --arg id "$vendor_product_id" '{couponCode:"CI10",deliverySelections:{($id):"PICKUP"}}')
+coupon_preview=$(request POST /orders/checkout/preview "$buyer_access" "$pickup_preview_body") || fail "coupon checkout preview"
+echo "$coupon_preview" | jq -e '.discountAmount == 129.9 and .shippingAmount == 0 and .total == 1169.1 and .requiresShippingAddress == false and any(.groups[]; .couponCode == "CI10")' >/dev/null || fail "pickup coupon preview invalid"
+
+shipping_preview_body=$(jq -cn --arg id "$vendor_product_id" '{couponCode:"CI10",deliverySelections:{($id):"SHIPPING_PAID"}}')
+shipping_preview=$(request POST /orders/checkout/preview "$buyer_access" "$shipping_preview_body") || fail "paid shipping checkout preview"
+echo "$shipping_preview" | jq -e '.discountAmount == 129.9 and .shippingAmount == 200 and .total == 1369.1 and .requiresShippingAddress == true and any(.groups[].items[]; .selectedDelivery.type == "SHIPPING_PAID" and (.selectedDelivery.fee|tonumber) == 200)' >/dev/null || fail "paid shipping preview invalid"
 
 request DELETE "/cart/$vendor_product_id" "$buyer_access" >/tmp/cart-promo-delete.json || fail "promo cart cleanup"
 
@@ -228,6 +233,23 @@ request DELETE "/vendor/promotions/$promotion_id" "$vendor_access" >/tmp/vendor-
 
 buyer_user_id=$(psql "$DIRECT_URL" -v ON_ERROR_STOP=1 -Atc "SELECT id FROM users WHERE email = 'ci-buyer@multiventas.test' LIMIT 1;")
 [ -n "$buyer_user_id" ] || fail "review buyer seed missing"
+
+notify_order_id=$(psql "$DIRECT_URL" -v ON_ERROR_STOP=1 -Atc "INSERT INTO orders (tenant_id, store_id, buyer_id, status, currency, subtotal, shipping_amount, discount_amount, total, created_at, updated_at) VALUES ('$vendor_id', '$store_id', '$buyer_user_id', 'PAID', 'UYU', 1299, 0, 0, 1299, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP) RETURNING id;" | head -n1)
+[ -n "$notify_order_id" ] || fail "notification order seed missing"
+psql "$DIRECT_URL" -v ON_ERROR_STOP=1 -c "INSERT INTO order_items (tenant_id, order_id, product_id, title, sku, quantity, unit_price, total, delivery_method, delivery_amount, delivery_details, created_at) VALUES ('$vendor_id', '$notify_order_id', '$vendor_product_id', 'CI Product Updated', 'CI-001', 1, 1299, 1299, 'PICKUP', 0, 'Retiro CI 123', CURRENT_TIMESTAMP);" >/dev/null
+
+request PATCH "/vendor/orders/$notify_order_id/status" "$vendor_access" '{"status":"SHIPPED"}' >/tmp/notify-order-shipped.json || fail "order shipped notification transition"
+request PATCH "/vendor/orders/$notify_order_id/status" "$vendor_access" '{"status":"DELIVERED"}' >/tmp/notify-order-delivered.json || fail "order delivered notification transition"
+
+buyer_notifications=$(request GET /notifications "$buyer_access") || fail "buyer notifications"
+echo "$buyer_notifications" | jq -e '(.unread >= 3) and any(.items[]; .type == "ORDER_SHIPPED") and any(.items[]; .type == "ORDER_DELIVERED") and any(.items[]; .type == "REVIEW_REQUEST")' >/dev/null || fail "buyer order notifications missing"
+
+first_notification_id=$(echo "$buyer_notifications" | jq -r '.items[0].id // empty')
+[ -n "$first_notification_id" ] || fail "buyer notification id missing"
+request PATCH "/notifications/$first_notification_id/read" "$buyer_access" >/tmp/notification-read.json || fail "mark notification read"
+request PATCH "/notifications/read-all" "$buyer_access" >/tmp/notifications-read-all.json || fail "mark all notifications read"
+buyer_notifications=$(request GET /notifications "$buyer_access") || fail "buyer notifications after read"
+echo "$buyer_notifications" | jq -e '.unread == 0' >/dev/null || fail "notifications did not mark as read"
 
 review_order_id=$(psql "$DIRECT_URL" -v ON_ERROR_STOP=1 -Atc "INSERT INTO orders (tenant_id, store_id, buyer_id, status, currency, subtotal, shipping_amount, discount_amount, total, created_at, updated_at) VALUES ('$vendor_id', '$store_id', '$buyer_user_id', 'DELIVERED', 'UYU', 1299, 0, 0, 1299, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP) RETURNING id;" | head -n1)
 [ -n "$review_order_id" ] || fail "review order seed missing"
@@ -241,6 +263,9 @@ review_id=$(echo "$review_created" | jq -r '.id // empty')
 [ -n "$review_id" ] || fail "review id missing"
 echo "$review_created" | jq -e '.status == "PENDING" and .rating == 5' >/dev/null || fail "new review should start pending"
 
+vendor_notifications=$(request GET /notifications "$vendor_access") || fail "vendor notifications after review"
+echo "$vendor_notifications" | jq -e 'any(.items[]; .type == "REVIEW_RECEIVED")' >/dev/null || fail "vendor review notification missing"
+
 duplicate_review_status=$(curl --silent --show-error -o /tmp/duplicate-review.json -w '%{http_code}'   -X POST "$BASE_URL/reviews"   -H "authorization: Bearer $buyer_access"   -H 'content-type: application/json'   --data "$review_payload") || fail "duplicate review request"
 [ "$duplicate_review_status" = "400" ] || fail "duplicate review was not rejected"
 
@@ -253,6 +278,9 @@ echo "$pending_reviews" | jq -e --arg id "$review_id" 'any(.items[]; .id == $id 
 request PATCH "/admin/reviews/$review_id" "$admin_access" '{"status":"PUBLISHED"}' >/tmp/review-published.json || fail "review moderation publish"
 jq -e '.status == "PUBLISHED"' /tmp/review-published.json >/dev/null || fail "review not published"
 
+buyer_notifications=$(request GET /notifications "$buyer_access") || fail "buyer notifications after review moderation"
+echo "$buyer_notifications" | jq -e 'any(.items[]; .type == "REVIEW_PUBLISHED")' >/dev/null || fail "buyer review published notification missing"
+
 public_reviews=$(request GET "/reviews/products/$vendor_product_id?limit=10") || fail "public product reviews"
 echo "$public_reviews" | jq -e --arg id "$review_id" '.summary.average == 5 and .summary.count >= 1 and any(.items[]; .id == $id and .verifiedPurchase == true and .rating == 5)' >/dev/null || fail "published verified review missing publicly"
 
@@ -261,4 +289,4 @@ echo "$store_reputation" | jq -e '.average == 5 and .count >= 1' >/dev/null || f
 
 request DELETE "/vendor/products/$vendor_product_id/images/$vendor_image_id" "$vendor_access" >/tmp/vendor-product-image-delete.json || fail "vendor product image delete"
 
-echo "Functional smoke passed: database, auth, catalog, cart, vendor dashboard, promotions, verified reviews, tenant isolation and admin flows."
+echo "Functional smoke passed: database, auth, catalog, delivery methods, notifications, vendor dashboard, promotions, verified reviews, tenant isolation and admin flows."
