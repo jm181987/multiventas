@@ -5,12 +5,19 @@ import { publicApi } from '@/lib/api';
 import { ProductGrid } from '@/components/ProductGrid';
 import { ProductSearch, Store as StoreType } from '@/lib/types';
 import { contrastText } from '@/lib/utils';
+import { ReviewStars } from '@/components/ReviewStars';
 
 export const dynamic = 'force-dynamic';
 
 type PublicStore = StoreType & {
   productCount?: number;
   vendor?: { businessName?: string | null };
+};
+
+type ReviewSummary = {
+  average: number;
+  count: number;
+  distribution: Array<{ rating: number; count: number }>;
 };
 
 function storeHref(slug: string, page: number, q: string) {
@@ -44,6 +51,9 @@ export default async function StorePage({
 
   if (!store) notFound();
 
+  const reputation = await publicApi<ReviewSummary>(`/reviews/stores/${store.id}/summary`)
+    .catch(() => ({ average: 0, count: 0, distribution: [] }));
+
   const accent = store.primaryColor || '#18181b';
   const accentText = contrastText(accent);
   const totalPages = Math.max(1, Math.ceil(products.total / products.limit));
@@ -64,7 +74,16 @@ export default async function StorePage({
             </div>
             {store.vendor?.businessName && <p className="mt-1 text-sm text-white/75">{store.vendor.businessName}</p>}
             {store.description && <p className="mt-3 max-w-3xl text-base text-white/90 sm:text-lg">{store.description}</p>}
-            <p className="mt-3 text-sm text-white/75">{store.productCount ?? products.total} productos publicados</p>
+            <div className="mt-3 flex flex-wrap items-center gap-4 text-sm text-white/80">
+              <span>{store.productCount ?? products.total} productos publicados</span>
+              {reputation.count > 0 && (
+                <span className="inline-flex items-center gap-2 rounded-full bg-black/20 px-3 py-1 backdrop-blur">
+                  <ReviewStars rating={reputation.average} />
+                  <strong className="text-white">{reputation.average.toFixed(1)}</strong>
+                  <span>· {reputation.count} opiniones verificadas</span>
+                </span>
+              )}
+            </div>
           </div>
         </div>
       </section>
