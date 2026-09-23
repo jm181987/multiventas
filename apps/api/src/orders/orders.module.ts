@@ -92,8 +92,17 @@ class OrdersService {
       };
     }
 
-    if (requireExplicit && options.length > 1 && !selectedType) {
-      throw new BadRequestException(`Elegí cómo querés recibir ${product.title}`);
+    if (!selectedType && options.length > 1) {
+      if (requireExplicit) {
+        throw new BadRequestException(`Elegí cómo querés recibir ${product.title}`);
+      }
+      return {
+        type: null as DeliveryMethodType | null,
+        fee: 0,
+        details: null,
+        legacy: false,
+        requiresSelection: true,
+      };
     }
 
     const selected = selectedType
@@ -109,6 +118,7 @@ class OrdersService {
       fee: selected.type === DeliveryMethodType.SHIPPING_PAID ? Number(selected.fee) : 0,
       details: selected.details ?? null,
       legacy: false,
+      requiresSelection: false,
     };
   }
 
@@ -206,6 +216,9 @@ class OrdersService {
           item.selectedDelivery.type === DeliveryMethodType.SHIPPING_PAID
           || item.selectedDelivery.type === DeliveryMethodType.SHIPPING_FREE,
         ),
+      ),
+      requiresDeliverySelection: groups.some((group) =>
+        group.items.some((item) => item.selectedDelivery.requiresSelection),
       ),
     };
   }
