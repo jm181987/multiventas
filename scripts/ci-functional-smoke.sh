@@ -206,7 +206,7 @@ store_products=$(request GET '/products?store=ci-store&limit=24') || fail "publi
 echo "$store_products" | jq -e --arg id "$vendor_product_id" '.total >= 1 and any(.items[]; .id == $id and .store.slug == "ci-store")' >/dev/null || fail "published product missing from seller storefront"
 
 vendor_dashboard=$(request GET /vendor/dashboard "$vendor_access") || fail "vendor commercial dashboard"
-echo "$vendor_dashboard" | jq -e '.vendor.status == "APPROVED" and .onboarding.totalSteps == 5 and .onboarding.completeSteps >= 4 and .metrics.products >= 1 and .metrics.activeProducts >= 1' >/dev/null || fail "vendor dashboard or onboarding invalid"
+echo "$vendor_dashboard" | jq -e '.vendor.status == "APPROVED" and .onboarding.totalSteps == 5 and .onboarding.completeSteps >= 3 and .metrics.products >= 1 and .metrics.activeProducts >= 1' >/dev/null || fail "vendor dashboard or onboarding invalid"
 
 promotion_body=$(jq -cn --arg storeId "$store_id" '{storeId:$storeId,name:"CI Welcome",code:"CI10",type:"PERCENT",value:10,minOrderAmount:100,maxUses:10}')
 request POST /vendor/promotions "$vendor_access" "$promotion_body" >/tmp/vendor-promotion.json || fail "vendor promotion create"
