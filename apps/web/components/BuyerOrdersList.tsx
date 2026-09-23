@@ -20,6 +20,7 @@ type BuyerOrder = {
   subtotal: string | number;
   shippingAmount?: string | number;
   discountAmount?: string | number;
+  couponCode?: string | null;
   total: string | number;
   shippingAddress?: Record<string, unknown> | null;
   notes?: string | null;
@@ -242,7 +243,13 @@ export function BuyerOrdersList() {
                         {order.notes && <div><p className="font-bold">Notas</p><p className="text-muted-foreground">{order.notes}</p></div>}
                         <div className="border-t pt-3">
                           <div className="flex justify-between"><span>Subtotal</span><span>{money(Number(order.subtotal), order.currency)}</span></div>
-                          <div className="mt-1 flex justify-between font-black"><span>Total</span><span>{money(Number(order.total), order.currency)}</span></div>
+                          {Number(order.discountAmount ?? 0) > 0 && (
+                            <div className="mt-1 flex justify-between text-emerald-700">
+                              <span>Descuento{order.couponCode ? ` · ${order.couponCode}` : ''}</span>
+                              <span>-{money(Number(order.discountAmount), order.currency)}</span>
+                            </div>
+                          )}
+                          <div className="mt-2 flex justify-between border-t pt-2 font-black"><span>Total</span><span>{money(Number(order.total), order.currency)}</span></div>
                         </div>
                       </div>
                     </div>

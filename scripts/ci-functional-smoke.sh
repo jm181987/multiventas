@@ -205,6 +205,27 @@ echo "$public_stores" | jq -e 'any(.items[]; .slug == "ci-store" and .name == "C
 store_products=$(request GET '/products?store=ci-store&limit=24') || fail "public store product catalog"
 echo "$store_products" | jq -e --arg id "$vendor_product_id" '.total >= 1 and any(.items[]; .id == $id and .store.slug == "ci-store")' >/dev/null || fail "published product missing from seller storefront"
 
+vendor_dashboard=$(request GET /vendor/dashboard "$vendor_access") || fail "vendor commercial dashboard"
+echo "$vendor_dashboard" | jq -e '.vendor.status == "APPROVED" and .onboarding.totalSteps == 5 and .onboarding.completeSteps >= 3 and .metrics.products >= 1 and .metrics.activeProducts >= 1' >/dev/null || fail "vendor dashboard or onboarding invalid"
+
+promotion_body=$(jq -cn --arg storeId "$store_id" '{storeId:$storeId,name:"CI Welcome",code:"CI10",type:"PERCENT",value:10,minOrderAmount:100,maxUses:10}')
+request POST /vendor/promotions "$vendor_access" "$promotion_body" >/tmp/vendor-promotion.json || fail "vendor promotion create"
+promotion_id=$(jq -r '.id // empty' /tmp/vendor-promotion.json)
+[ -n "$promotion_id" ] || fail "promotion id missing"
+
+promotions=$(request GET /vendor/promotions "$vendor_access") || fail "vendor promotions list"
+echo "$promotions" | jq -e 'any(.[]; .code == "CI10" and (.value|tonumber) == 10 and .isActive == true)' >/dev/null || fail "promotion list invalid"
+
+cart_add_body=$(jq -cn --arg id "$vendor_product_id" '{productId:$id,quantity:1}')
+request POST /cart "$buyer_access" "$cart_add_body" >/tmp/cart-promo-add.json || fail "promo cart add"
+
+coupon_preview=$(request POST /orders/checkout/preview "$buyer_access" '{"couponCode":"CI10"}') || fail "coupon checkout preview"
+echo "$coupon_preview" | jq -e '.discountAmount == 129.9 and .total == 1169.1 and any(.groups[]; .couponCode == "CI10")' >/dev/null || fail "coupon discount preview invalid"
+
+request DELETE "/cart/$vendor_product_id" "$buyer_access" >/tmp/cart-promo-delete.json || fail "promo cart cleanup"
+
+request DELETE "/vendor/promotions/$promotion_id" "$vendor_access" >/tmp/vendor-promotion-delete.json || fail "vendor promotion delete"
+
 request DELETE "/vendor/products/$vendor_product_id/images/$vendor_image_id" "$vendor_access" >/tmp/vendor-product-image-delete.json || fail "vendor product image delete"
 
-echo "Functional smoke passed: database, auth, public catalog, cart, vendor tenant isolation and admin flows."
+echo "Functional smoke passed: database, auth, catalog, cart, vendor dashboard, promotions, tenant isolation and admin flows."

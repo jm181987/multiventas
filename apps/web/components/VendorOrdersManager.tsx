@@ -21,6 +21,7 @@ type VendorOrder = {
   subtotal: string | number;
   shippingAmount: string | number;
   discountAmount: string | number;
+  couponCode?: string | null;
   total: string | number;
   shippingAddress?: Record<string, unknown> | null;
   notes?: string | null;
@@ -258,7 +259,16 @@ export function VendorOrdersManager() {
                               <p className="shrink-0 font-bold">{money(Number(item.total), order.currency)}</p>
                             </div>
                           ))}
-                          <div className="flex justify-between border-t pt-3 text-lg font-black"><span>Total</span><span>{money(Number(order.total), order.currency)}</span></div>
+                          <div className="space-y-1 border-t pt-3 text-sm">
+                            <div className="flex justify-between"><span>Subtotal</span><span>{money(Number(order.subtotal), order.currency)}</span></div>
+                            {Number(order.discountAmount ?? 0) > 0 && (
+                              <div className="flex justify-between text-emerald-700">
+                                <span>Descuento{order.couponCode ? ` · ${order.couponCode}` : ''}</span>
+                                <span>-{money(Number(order.discountAmount), order.currency)}</span>
+                              </div>
+                            )}
+                            <div className="mt-2 flex justify-between border-t pt-2 text-lg font-black"><span>Total</span><span>{money(Number(order.total), order.currency)}</span></div>
+                          </div>
                         </div>
 
                         <div className="space-y-4 text-sm">

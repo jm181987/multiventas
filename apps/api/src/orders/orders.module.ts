@@ -1,5 +1,5 @@
 import { BadRequestException, Body, Controller, Get, Injectable, Module, Param, Patch, Post, UseGuards } from '@nestjs/common';
-import { IsIn, IsObject, IsOptional, IsString } from 'class-validator';
+import { IsIn, IsObject, IsOptional, IsString, MaxLength } from 'class-validator';
 import { DbService } from '../common/db.service';
 import { CartModule, CartService } from '../cart/cart.module';
 import { PaymentsModule } from '../payments/payments.module';
@@ -8,11 +8,17 @@ import { AuthUser, CurrentUser, Roles, SystemContext } from '../common/decorator
 import { JwtAuthGuard, RolesGuard } from '../common/guards';
 import { OrderStatus, ProductStatus, UserRole } from '@multiventas/db';
 import { StorageService } from '../storage/storage.module';
+import { PromotionsModule, PromotionsService } from '../promotions/promotions.module';
 
 class CheckoutDto {
   @IsOptional() @IsObject() shippingAddress?: Record<string, unknown>;
   @IsOptional() @IsString() notes?: string;
   @IsOptional() @IsString() deviceId?: string;
+  @IsOptional() @IsString() @MaxLength(80) couponCode?: string;
+}
+
+class CheckoutPreviewDto {
+  @IsOptional() @IsString() @MaxLength(80) couponCode?: string;
 }
 
 class OrderStatusDto {
@@ -26,6 +32,7 @@ class OrdersService {
     private readonly cart: CartService,
     private readonly mp: MercadoPagoService,
     private readonly storage: StorageService,
+    private readonly promotions: PromotionsService,
   ) {}
 
   private normalizeDeviceId(deviceId?: string) {
@@ -66,6 +73,53 @@ class OrdersService {
     } as T;
   }
 
+  async preview(userId: string, couponCode?: string) {
+    const cart = await this.cart.get(userId);
+    if (!cart.length) throw new BadRequestException('El carrito está vacío');
+
+    const products = await this.db.client.product.findMany({
+      where: { id: { in: cart.map((x) => x.productId) }, status: ProductStatus.ACTIVE, deletedAt: null },
+      include: { store: true },
+    });
+    if (products.length !== cart.length) throw new BadRequestException('Hay productos no disponibles');
+
+    const grouped = new Map<string, { storeId: string; storeName: string; rows: Array<{ product: any; quantity: number }> }>();
+    for (const item of cart) {
+      const product = products.find((p) => p.id === item.productId)!;
+      const group = grouped.get(product.storeId) ?? { storeId: product.storeId, storeName: product.store.name, rows: [] };
+      group.rows.push({ product, quantity: item.quantity });
+      grouped.set(product.storeId, group);
+    }
+
+    let matched = false;
+    const groups = [];
+    for (const group of grouped.values()) {
+      const subtotal = Math.round(group.rows.reduce((sum, row) => sum + Number(row.product.price) * row.quantity, 0) * 100) / 100;
+      const applied = couponCode ? await this.promotions.applicable(group.storeId, couponCode, subtotal) : null;
+      if (applied) matched = true;
+      const discountAmount = applied?.discount ?? 0;
+      groups.push({
+        storeId: group.storeId,
+        storeName: group.storeName,
+        subtotal,
+        discountAmount,
+        total: Math.round((subtotal - discountAmount) * 100) / 100,
+        couponCode: applied?.code ?? null,
+      });
+    }
+
+    if (couponCode && !matched) {
+      throw new BadRequestException('El cupón no es válido para los productos de este carrito');
+    }
+
+    return {
+      groups,
+      subtotal: Math.round(groups.reduce((sum, group) => sum + group.subtotal, 0) * 100) / 100,
+      discountAmount: Math.round(groups.reduce((sum, group) => sum + group.discountAmount, 0) * 100) / 100,
+      total: Math.round(groups.reduce((sum, group) => sum + group.total, 0) * 100) / 100,
+    };
+  }
+
   async checkout(userId: string, dto: CheckoutDto) {
     const cart = await this.cart.get(userId);
     if (!cart.length) throw new BadRequestException('El carrito está vacío');
@@ -86,16 +140,35 @@ class OrdersService {
       grouped.set(key, group);
     }
 
-    const checkouts = [];
+    const prepared = [];
+    let couponMatched = false;
     for (const group of grouped.values()) {
       const subtotal = Math.round(group.rows.reduce((sum, row) => sum + Number(row.product.price) * row.quantity, 0) * 100) / 100;
+      const applied = dto.couponCode
+        ? await this.promotions.applicable(group.storeId, dto.couponCode, subtotal)
+        : null;
+      if (applied) couponMatched = true;
+      prepared.push({ group, subtotal, applied });
+    }
+
+    if (dto.couponCode && !couponMatched) {
+      throw new BadRequestException('El cupón no es válido para los productos de este carrito');
+    }
+
+    const checkouts = [];
+    for (const { group, subtotal, applied } of prepared) {
+      const discountAmount = applied?.discount ?? 0;
+      const total = Math.round((subtotal - discountAmount) * 100) / 100;
       const order = await this.db.client.order.create({
         data: {
           tenantId: group.tenantId,
           storeId: group.storeId,
           buyerId: userId,
           subtotal,
-          total: subtotal,
+          discountAmount,
+          total,
+          promotionId: applied?.promotion.id,
+          couponCode: applied?.code,
           shippingAddress: dto.shippingAddress as any,
           notes: dto.notes,
           items: {
@@ -127,6 +200,10 @@ class OrdersService {
         initPoint: preference.init_point,
         sandboxInitPoint: preference.sandbox_init_point,
         marketplaceFee: preference.marketplaceFee,
+        subtotal,
+        discountAmount,
+        total,
+        couponCode: applied?.code ?? null,
       });
     }
 
@@ -293,6 +370,12 @@ class BuyerOrdersController {
   constructor(private readonly orders: OrdersService) {}
 
   @SystemContext()
+  @Post('checkout/preview')
+  preview(@CurrentUser() user: AuthUser, @Body() dto: CheckoutPreviewDto) {
+    return this.orders.preview(user.sub, dto.couponCode);
+  }
+
+  @SystemContext()
   @Post('checkout')
   checkout(@CurrentUser() user: AuthUser, @Body() dto: CheckoutDto) {
     return this.orders.checkout(user.sub, dto);
@@ -327,7 +410,7 @@ class VendorOrdersController {
 }
 
 @Module({
-  imports: [CartModule, PaymentsModule],
+  imports: [CartModule, PaymentsModule, PromotionsModule],
   controllers: [BuyerOrdersController, VendorOrdersController],
   providers: [OrdersService],
 })

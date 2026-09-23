@@ -3,7 +3,16 @@ import { IsIn, IsOptional, IsString } from 'class-validator';
 import { DbService } from '../common/db.service';
 import { AuthUser, CurrentUser, Roles } from '../common/decorators';
 import { JwtAuthGuard, RolesGuard } from '../common/guards';
-import { KycStatus, StoreStatus, UserRole, VendorStatus } from '@multiventas/db';
+import {
+  CommissionStatus,
+  KycStatus,
+  OAuthProvider,
+  OrderStatus,
+  ProductStatus,
+  StoreStatus,
+  UserRole,
+  VendorStatus,
+} from '@multiventas/db';
 
 class UpdateVendorDto {
   @IsOptional() @IsString() businessName?: string;
@@ -26,6 +35,196 @@ class VendorsService {
 
   updateMe(id: string, dto: UpdateVendorDto) {
     return this.db.client.vendor.update({ where: { id }, data: dto });
+  }
+
+  async dashboard(tenantId: string) {
+    const now = new Date();
+    const startOfToday = new Date(now);
+    startOfToday.setHours(0, 0, 0, 0);
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    const chartStart = new Date(startOfToday);
+    chartStart.setDate(chartStart.getDate() - 13);
+
+    const paidStatuses = [OrderStatus.PAID, OrderStatus.SHIPPED, OrderStatus.DELIVERED];
+
+    const [
+      vendor,
+      mp,
+      totalProducts,
+      activeProducts,
+      lowStock,
+      outOfStock,
+      paidOrders,
+      todaySales,
+      monthSales,
+      pendingFulfillment,
+      monthCommission,
+      chartOrders,
+      topProducts,
+      recentOrders,
+    ] = await Promise.all([
+      this.db.client.vendor.findUnique({
+        where: { id: tenantId },
+        include: { stores: { where: { deletedAt: null }, orderBy: { createdAt: 'asc' } } },
+      }),
+      this.db.client.oAuthToken.findUnique({
+        where: { tenantId_provider: { tenantId, provider: OAuthProvider.MERCADO_PAGO } },
+        select: { expiresAt: true },
+      }),
+      this.db.client.product.count({ where: { tenantId, deletedAt: null } }),
+      this.db.client.product.count({ where: { tenantId, deletedAt: null, status: ProductStatus.ACTIVE } }),
+      this.db.client.product.count({ where: { tenantId, deletedAt: null, status: ProductStatus.ACTIVE, stock: { gt: 0, lte: 5 } } }),
+      this.db.client.product.count({ where: { tenantId, deletedAt: null, status: ProductStatus.ACTIVE, stock: 0 } }),
+      this.db.client.order.aggregate({
+        where: { tenantId, status: { in: paidStatuses } },
+        _sum: { total: true },
+        _count: { id: true },
+      }),
+      this.db.client.order.aggregate({
+        where: { tenantId, status: { in: paidStatuses }, createdAt: { gte: startOfToday } },
+        _sum: { total: true },
+        _count: { id: true },
+      }),
+      this.db.client.order.aggregate({
+        where: { tenantId, status: { in: paidStatuses }, createdAt: { gte: startOfMonth } },
+        _sum: { total: true },
+        _count: { id: true },
+      }),
+      this.db.client.order.count({ where: { tenantId, status: OrderStatus.PAID } }),
+      this.db.client.commission.aggregate({
+        where: { tenantId, status: CommissionStatus.CONFIRMED, createdAt: { gte: startOfMonth } },
+        _sum: { amount: true },
+      }),
+      this.db.client.order.findMany({
+        where: { tenantId, status: { in: paidStatuses }, createdAt: { gte: chartStart } },
+        select: { createdAt: true, total: true },
+        orderBy: { createdAt: 'asc' },
+      }),
+      this.db.client.orderItem.groupBy({
+        by: ['productId', 'title'],
+        where: { tenantId, order: { status: { in: paidStatuses } } },
+        _sum: { quantity: true, total: true },
+        orderBy: { _sum: { quantity: 'desc' } },
+        take: 5,
+      }),
+      this.db.client.order.findMany({
+        where: { tenantId },
+        select: {
+          id: true,
+          status: true,
+          total: true,
+          currency: true,
+          createdAt: true,
+          store: { select: { name: true } },
+          buyer: { select: { name: true } },
+        },
+        orderBy: { createdAt: 'desc' },
+        take: 5,
+      }),
+    ]);
+
+    if (!vendor) return null;
+
+    const primaryStore = vendor.stores[0] ?? null;
+    const brandingComplete = Boolean(
+      primaryStore?.name
+      && primaryStore?.description
+      && primaryStore?.primaryColor
+      && (primaryStore?.logoUrl || primaryStore?.coverUrl),
+    );
+    const mpConnected = Boolean(mp && mp.expiresAt.getTime() > now.getTime());
+    const onboarding = [
+      {
+        key: 'approval',
+        title: 'Cuenta aprobada',
+        description: 'Tu cuenta debe estar aprobada para publicar y vender.',
+        complete: vendor.status === VendorStatus.APPROVED,
+        href: '/vendor',
+      },
+      {
+        key: 'branding',
+        title: 'Personalizá tu tienda',
+        description: 'Completá descripción, color y al menos logo o portada.',
+        complete: brandingComplete,
+        href: '/vendor/configuracion',
+      },
+      {
+        key: 'payments',
+        title: 'Conectá Mercado Pago',
+        description: 'Vinculá tu cuenta para poder cobrar tus ventas.',
+        complete: mpConnected,
+        href: '/vendor/mercadopago',
+      },
+      {
+        key: 'product',
+        title: 'Creá tu primer producto',
+        description: 'Agregá precio, stock, descripción e imagen.',
+        complete: totalProducts > 0,
+        href: '/vendor/productos',
+      },
+      {
+        key: 'publish',
+        title: 'Publicá tu primer producto',
+        description: 'Activá un producto para que aparezca en el marketplace.',
+        complete: activeProducts > 0,
+        href: '/vendor/productos',
+      },
+    ];
+    const completeSteps = onboarding.filter((item) => item.complete).length;
+
+    const dayMap = new Map<string, number>();
+    for (let index = 0; index < 14; index += 1) {
+      const date = new Date(chartStart);
+      date.setDate(chartStart.getDate() + index);
+      dayMap.set(date.toISOString().slice(0, 10), 0);
+    }
+    for (const order of chartOrders) {
+      const key = order.createdAt.toISOString().slice(0, 10);
+      dayMap.set(key, (dayMap.get(key) ?? 0) + Number(order.total));
+    }
+
+    const monthRevenue = Number(monthSales._sum.total ?? 0);
+    const monthOrders = monthSales._count.id;
+
+    return {
+      vendor: {
+        status: vendor.status,
+        kycStatus: vendor.kycStatus,
+        businessName: vendor.businessName,
+      },
+      onboarding: {
+        steps: onboarding,
+        completeSteps,
+        totalSteps: onboarding.length,
+        percent: Math.round((completeSteps / onboarding.length) * 100),
+        complete: completeSteps === onboarding.length,
+      },
+      metrics: {
+        revenueTotal: Number(paidOrders._sum.total ?? 0),
+        revenueToday: Number(todaySales._sum.total ?? 0),
+        revenueMonth: monthRevenue,
+        ordersToday: todaySales._count.id,
+        ordersMonth: monthOrders,
+        averageTicketMonth: monthOrders ? monthRevenue / monthOrders : 0,
+        pendingFulfillment,
+        products: totalProducts,
+        activeProducts,
+        lowStock,
+        outOfStock,
+        commissionMonth: Number(monthCommission._sum.amount ?? 0),
+      },
+      salesChart: Array.from(dayMap.entries()).map(([date, total]) => ({ date, total })),
+      topProducts: topProducts.map((item) => ({
+        productId: item.productId,
+        title: item.title,
+        quantity: item._sum.quantity ?? 0,
+        revenue: Number(item._sum.total ?? 0),
+      })),
+      recentOrders: recentOrders.map((order) => ({
+        ...order,
+        total: Number(order.total),
+      })),
+    };
   }
 
   list() {
@@ -93,5 +292,20 @@ class VendorsController {
   }
 }
 
-@Module({ controllers: [VendorsController], providers: [VendorsService] })
+@UseGuards(JwtAuthGuard, RolesGuard)
+@Roles(UserRole.VENDOR)
+@Controller('vendor/dashboard')
+class VendorDashboardController {
+  constructor(private readonly vendors: VendorsService) {}
+
+  @Get()
+  dashboard(@CurrentUser() user: AuthUser) {
+    return this.vendors.dashboard(user.tenantId!);
+  }
+}
+
+@Module({
+  controllers: [VendorsController, VendorDashboardController],
+  providers: [VendorsService],
+})
 export class VendorsModule {}
