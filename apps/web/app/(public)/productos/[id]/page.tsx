@@ -10,6 +10,7 @@ import { Badge } from '@/components/ui/badge';
 import { ProductPurchasePanel } from '@/components/ProductPurchasePanel';
 import { ReviewStars } from '@/components/ReviewStars';
 import { FavoriteButton } from '@/components/FavoriteButton';
+import { ProductViewTracker } from '@/components/ProductViewTracker';
 
 export const dynamic = 'force-dynamic';
 
@@ -53,6 +54,7 @@ export default async function ProductPage({ params }: { params: { id: string } }
 
   return (
     <main>
+      <ProductViewTracker productId={product.id} />
       <section className="relative overflow-hidden border-b text-white" style={{ backgroundColor: accent }}>
         {product.store.coverUrl && <img src={product.store.coverUrl} alt="" className="absolute inset-0 h-full w-full object-cover" />}
         <div className="absolute inset-0 bg-black/45" />
