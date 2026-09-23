@@ -1,7 +1,7 @@
 'use client';
 
 import { FormEvent, useEffect, useState } from 'react';
-import { ShieldCheck } from 'lucide-react';
+import { ShieldCheck, TicketPercent } from 'lucide-react';
 import { authApi } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -19,6 +19,10 @@ type CheckoutResult = {
     preferenceId: string;
     initPoint: string;
     marketplaceFee: number;
+    subtotal?: number;
+    discountAmount?: number;
+    total?: number;
+    couponCode?: string | null;
   }>;
 };
 
@@ -73,6 +77,7 @@ export function CheckoutForm() {
             postalCode: form.get('postalCode'),
           },
           notes: form.get('notes'),
+          couponCode: String(form.get('couponCode') ?? '').trim() || undefined,
           deviceId: deviceId || undefined,
         }),
       });
@@ -110,6 +115,17 @@ export function CheckoutForm() {
       </div>
       <Input name="postalCode" placeholder="Código postal" />
       <Input name="notes" placeholder="Notas de entrega" />
+
+      <div className="rounded-xl border border-dashed bg-indigo-50/40 p-4">
+        <label className="block text-sm font-semibold">
+          ¿Tenés un cupón?
+          <div className="relative mt-2">
+            <TicketPercent className="absolute left-3 top-3 size-4 text-indigo-500" />
+            <Input name="couponCode" className="pl-9 uppercase" placeholder="Ej: BIENVENIDA10" autoComplete="off" />
+          </div>
+        </label>
+        <p className="mt-2 text-xs text-muted-foreground">Si el carrito tiene varias tiendas, el código se aplica únicamente a la tienda que emitió la promoción.</p>
+      </div>
 
       <div className="flex items-start gap-2 rounded-lg border bg-muted/20 p-3 text-xs text-muted-foreground">
         <ShieldCheck className="mt-0.5 size-4 shrink-0 text-emerald-600" />
