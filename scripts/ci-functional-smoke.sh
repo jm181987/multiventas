@@ -196,6 +196,10 @@ echo "$vendor_products" | jq -e 'length == 1 and .[0].slug == "ci-product" and .
 public_vendor_products=$(request GET '/products?q=CI%20Product%20Updated') || fail "public vendor product search"
 echo "$public_vendor_products" | jq -e --arg id "$vendor_product_id" 'any(.items[]; .id == $id and .status == "ACTIVE" and (.deliveryOptions|length) == 2)' >/dev/null || fail "published vendor product or delivery methods are not visible publicly"
 
+request POST "/analytics/products/$vendor_product_id/view" >/tmp/analytics-view-1.json || fail "analytics view 1"
+request POST "/analytics/products/$vendor_product_id/view" >/tmp/analytics-view-2.json || fail "analytics view 2"
+request POST "/analytics/products/$vendor_product_id/view" >/tmp/analytics-view-3.json || fail "analytics view 3"
+
 public_store=$(request GET /stores/ci-store) || fail "public branded store after publish"
 echo "$public_store" | jq -e '.primaryColor == "#112233" and .productCount >= 1' >/dev/null || fail "branded storefront metadata invalid"
 
@@ -207,10 +211,6 @@ echo "$favorite_ids" | jq -e --arg id "$vendor_product_id" 'index($id) != null' 
 
 favorites=$(request GET /favorites "$buyer_access") || fail "favorites list"
 echo "$favorites" | jq -e --arg id "$vendor_product_id" 'any(.[]; .product.id == $id and .product.title == "CI Product Updated")' >/dev/null || fail "favorite product missing"
-
-request DELETE "/favorites/$vendor_product_id" "$buyer_access" >/tmp/favorite-delete.json || fail "favorite delete"
-favorite_ids=$(request GET /favorites/ids "$buyer_access") || fail "favorite ids after delete"
-echo "$favorite_ids" | jq -e --arg id "$vendor_product_id" 'index($id) == null' >/dev/null || fail "favorite was not removed"
 
 public_stores=$(request GET '/stores?limit=20') || fail "public stores directory"
 echo "$public_stores" | jq -e 'any(.items[]; .slug == "ci-store" and .name == "CI Store Branded" and .productCount >= 1)' >/dev/null || fail "published vendor store missing from store directory"
@@ -260,6 +260,22 @@ buyer_cart=$(request GET /cart "$buyer_access") || fail "cart after reorder"
 echo "$buyer_cart" | jq -e --arg id "$vendor_product_id" 'any(.[]; .productId == $id and .quantity == 1)' >/dev/null || fail "reorder cart state invalid"
 request DELETE "/cart/$vendor_product_id" "$buyer_access" >/tmp/reorder-cart-cleanup.json || fail "reorder cart cleanup"
 
+vendor_analytics=$(request GET '/vendor/analytics?days=30' "$vendor_access") || fail "vendor commerce analytics"
+echo "$vendor_analytics" | jq -e --arg id "$vendor_product_id" '
+  .days == 30
+  and .summary.views >= 3
+  and .summary.cartAdds >= 2
+  and .summary.favoriteAdds >= 1
+  and .summary.currentFavorites >= 1
+  and .summary.orders >= 1
+  and .summary.revenue >= 1299
+  and any(.products[]; .productId == $id and .views >= 3 and .cartAdds >= 2 and .favoriteAdds >= 1 and .currentFavorites >= 1 and .orders >= 1 and .revenue >= 1299)
+' >/dev/null || fail "vendor commerce analytics invalid"
+
+request DELETE "/favorites/$vendor_product_id" "$buyer_access" >/tmp/favorite-delete.json || fail "favorite delete"
+favorite_ids=$(request GET /favorites/ids "$buyer_access") || fail "favorite ids after delete"
+echo "$favorite_ids" | jq -e --arg id "$vendor_product_id" 'index($id) == null' >/dev/null || fail "favorite was not removed"
+
 buyer_notifications=$(request GET /notifications "$buyer_access") || fail "buyer notifications"
 echo "$buyer_notifications" | jq -e '(.unread >= 3) and any(.items[]; .type == "ORDER_SHIPPED") and any(.items[]; .type == "ORDER_DELIVERED") and any(.items[]; .type == "REVIEW_REQUEST")' >/dev/null || fail "buyer order notifications missing"
 
@@ -308,4 +324,4 @@ echo "$store_reputation" | jq -e '.average == 5 and .count >= 1' >/dev/null || f
 
 request DELETE "/vendor/products/$vendor_product_id/images/$vendor_image_id" "$vendor_access" >/tmp/vendor-product-image-delete.json || fail "vendor product image delete"
 
-echo "Functional smoke passed: database, auth, catalog, favorites, reorder, cart retention, delivery methods, notifications, vendor dashboard, promotions, verified reviews, tenant isolation and admin flows."
+echo "Functional smoke passed: database, auth, catalog, commerce analytics, favorites, reorder, cart retention, delivery methods, notifications, vendor dashboard, promotions, verified reviews, tenant isolation and admin flows."
