@@ -1,5 +1,5 @@
 import { BadRequestException, Body, Controller, Get, Injectable, Module, Param, Patch, Post, UseGuards } from '@nestjs/common';
-import { IsIn, IsObject, IsOptional, IsString } from 'class-validator';
+import { IsIn, IsObject, IsOptional, IsString, MaxLength } from 'class-validator';
 import { DbService } from '../common/db.service';
 import { CartModule, CartService } from '../cart/cart.module';
 import { PaymentsModule } from '../payments/payments.module';
@@ -8,11 +8,13 @@ import { AuthUser, CurrentUser, Roles, SystemContext } from '../common/decorator
 import { JwtAuthGuard, RolesGuard } from '../common/guards';
 import { OrderStatus, ProductStatus, UserRole } from '@multiventas/db';
 import { StorageService } from '../storage/storage.module';
+import { PromotionsModule, PromotionsService } from '../promotions/promotions.module';
 
 class CheckoutDto {
   @IsOptional() @IsObject() shippingAddress?: Record<string, unknown>;
   @IsOptional() @IsString() notes?: string;
   @IsOptional() @IsString() deviceId?: string;
+  @IsOptional() @IsString() @MaxLength(80) couponCode?: string;
 }
 
 class OrderStatusDto {
@@ -26,6 +28,7 @@ class OrdersService {
     private readonly cart: CartService,
     private readonly mp: MercadoPagoService,
     private readonly storage: StorageService,
+    private readonly promotions: PromotionsService,
   ) {}
 
   private normalizeDeviceId(deviceId?: string) {
@@ -86,16 +89,35 @@ class OrdersService {
       grouped.set(key, group);
     }
 
-    const checkouts = [];
+    const prepared = [];
+    let couponMatched = false;
     for (const group of grouped.values()) {
       const subtotal = Math.round(group.rows.reduce((sum, row) => sum + Number(row.product.price) * row.quantity, 0) * 100) / 100;
+      const applied = dto.couponCode
+        ? await this.promotions.applicable(group.storeId, dto.couponCode, subtotal)
+        : null;
+      if (applied) couponMatched = true;
+      prepared.push({ group, subtotal, applied });
+    }
+
+    if (dto.couponCode && !couponMatched) {
+      throw new BadRequestException('El cupón no es válido para los productos de este carrito');
+    }
+
+    const checkouts = [];
+    for (const { group, subtotal, applied } of prepared) {
+      const discountAmount = applied?.discount ?? 0;
+      const total = Math.round((subtotal - discountAmount) * 100) / 100;
       const order = await this.db.client.order.create({
         data: {
           tenantId: group.tenantId,
           storeId: group.storeId,
           buyerId: userId,
           subtotal,
-          total: subtotal,
+          discountAmount,
+          total,
+          promotionId: applied?.promotion.id,
+          couponCode: applied?.code,
           shippingAddress: dto.shippingAddress as any,
           notes: dto.notes,
           items: {
@@ -127,6 +149,10 @@ class OrdersService {
         initPoint: preference.init_point,
         sandboxInitPoint: preference.sandbox_init_point,
         marketplaceFee: preference.marketplaceFee,
+        subtotal,
+        discountAmount,
+        total,
+        couponCode: applied?.code ?? null,
       });
     }
 
@@ -327,7 +353,7 @@ class VendorOrdersController {
 }
 
 @Module({
-  imports: [CartModule, PaymentsModule],
+  imports: [CartModule, PaymentsModule, PromotionsModule],
   controllers: [BuyerOrdersController, VendorOrdersController],
   providers: [OrdersService],
 })
