@@ -16,11 +16,11 @@ import {
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { Type } from 'class-transformer';
-import { IsIn, IsInt, IsNumber, IsOptional, IsPositive, IsString, Max, Min } from 'class-validator';
+import { ArrayMaxSize, IsArray, IsIn, IsInt, IsNumber, IsOptional, IsPositive, IsString, Max, MaxLength, Min, ValidateNested } from 'class-validator';
 import { DbService } from '../common/db.service';
 import { AuthUser, CurrentUser, Roles } from '../common/decorators';
 import { JwtAuthGuard, RolesGuard } from '../common/guards';
-import { Prisma, ProductStatus, StoreStatus, UserRole, VendorStatus } from '@multiventas/db';
+import { DeliveryMethodType, Prisma, ProductStatus, StoreStatus, UserRole, VendorStatus } from '@multiventas/db';
 import { StorageService } from '../storage/storage.module';
 
 class ProductQueryDto {
@@ -33,6 +33,19 @@ class ProductQueryDto {
   @IsOptional() @Type(() => Number) @IsInt() @Min(1) @Max(50) limit = 24;
 }
 
+class DeliveryOptionDto {
+  @IsIn([
+    DeliveryMethodType.SHIPPING_PAID,
+    DeliveryMethodType.SHIPPING_FREE,
+    DeliveryMethodType.PICKUP,
+    DeliveryMethodType.DIGITAL,
+  ])
+  type!: DeliveryMethodType;
+
+  @IsOptional() @Type(() => Number) @IsNumber() @Min(0) fee?: number;
+  @IsOptional() @IsString() @MaxLength(1200) details?: string;
+}
+
 class ProductDto {
   @IsString() storeId!: string;
   @IsOptional() @IsString() categoryId?: string;
@@ -43,6 +56,8 @@ class ProductDto {
   @Type(() => Number) @IsNumber() @IsPositive() price!: number;
   @IsOptional() @IsString() currency = 'UYU';
   @Type(() => Number) @IsInt() @Min(0) stock!: number;
+  @IsOptional() @IsArray() @ArrayMaxSize(4) @ValidateNested({ each: true }) @Type(() => DeliveryOptionDto)
+  deliveryOptions?: DeliveryOptionDto[];
 }
 
 class ProductUpdateDto {
@@ -54,6 +69,8 @@ class ProductUpdateDto {
   @IsOptional() @Type(() => Number) @IsNumber() @IsPositive() price?: number;
   @IsOptional() @Type(() => Number) @IsInt() @Min(0) stock?: number;
   @IsOptional() @IsIn([ProductStatus.DRAFT, ProductStatus.ACTIVE, ProductStatus.ARCHIVED]) status?: ProductStatus;
+  @IsOptional() @IsArray() @ArrayMaxSize(4) @ValidateNested({ each: true }) @Type(() => DeliveryOptionDto)
+  deliveryOptions?: DeliveryOptionDto[];
 }
 
 class ImageDto {
@@ -105,7 +122,12 @@ class ProductsService {
     const [items, total] = await Promise.all([
       this.db.client.product.findMany({
         where,
-        include: { images: { orderBy: { sortOrder: 'asc' } }, store: true, category: true },
+        include: {
+          images: { orderBy: { sortOrder: 'asc' } },
+          store: true,
+          category: true,
+          deliveryOptions: { where: { isActive: true }, orderBy: { type: 'asc' } },
+        },
         orderBy: { createdAt: 'desc' },
         skip: (query.page - 1) * query.limit,
         take: query.limit,
@@ -129,6 +151,7 @@ class ProductsService {
         store: true,
         category: true,
         reviews: { where: { status: 'PUBLISHED' }, take: 20 },
+        deliveryOptions: { where: { isActive: true }, orderBy: { type: 'asc' } },
       },
     });
     return product ? this.normalizeProduct(product) : null;
@@ -137,7 +160,12 @@ class ProductsService {
   async mine() {
     const items = await this.db.client.product.findMany({
       where: { deletedAt: null },
-      include: { images: { orderBy: { sortOrder: 'asc' } }, store: true, category: true },
+      include: {
+        images: { orderBy: { sortOrder: 'asc' } },
+        store: true,
+        category: true,
+        deliveryOptions: { orderBy: { type: 'asc' } },
+      },
       orderBy: { createdAt: 'desc' },
     });
     return items.map((item) => this.normalizeProduct(item));
@@ -156,6 +184,39 @@ class ProductsService {
       throw new BadRequestException('El slug o SKU ya está en uso en esta tienda');
     }
     throw error;
+  }
+
+  private normalizeDeliveryOptions(options?: DeliveryOptionDto[]) {
+    if (options === undefined) return undefined;
+    const seen = new Set<DeliveryMethodType>();
+    return options.map((option) => {
+      if (seen.has(option.type)) throw new BadRequestException('No repitas el mismo método de entrega');
+      seen.add(option.type);
+      const fee = option.type === DeliveryMethodType.SHIPPING_PAID ? Number(option.fee ?? 0) : 0;
+      if (option.type === DeliveryMethodType.SHIPPING_PAID && fee <= 0) {
+        throw new BadRequestException('El envío pago necesita un costo mayor a 0');
+      }
+      return {
+        type: option.type,
+        fee,
+        details: option.details?.trim() || null,
+      };
+    });
+  }
+
+  private async replaceDeliveryOptions(
+    tenantId: string,
+    productId: string,
+    options: DeliveryOptionDto[] | undefined,
+  ) {
+    if (options === undefined) return;
+    const normalized = this.normalizeDeliveryOptions(options) ?? [];
+    await this.db.client.productDeliveryOption.deleteMany({ where: { productId, tenantId } });
+    if (normalized.length) {
+      await this.db.client.productDeliveryOption.createMany({
+        data: normalized.map((option) => ({ tenantId, productId, ...option })),
+      });
+    }
   }
 
   private async ensurePublishable(tenantId: string, storeId: string) {
@@ -184,12 +245,23 @@ class ProductsService {
   async create(tenantId: string, dto: ProductDto) {
     const store = await this.db.client.store.findFirst({ where: { id: dto.storeId, tenantId, deletedAt: null } });
     if (!store) throw new BadRequestException('Tienda inválida');
+    const { deliveryOptions, ...productData } = dto;
+    this.normalizeDeliveryOptions(deliveryOptions);
     try {
       const product = await this.db.client.product.create({
-        data: { tenantId, ...dto, status: ProductStatus.DRAFT },
-        include: { images: true, store: true, category: true },
+        data: { tenantId, ...productData, status: ProductStatus.DRAFT },
       });
-      return this.normalizeProduct(product);
+      await this.replaceDeliveryOptions(tenantId, product.id, deliveryOptions);
+      const complete = await this.db.client.product.findUniqueOrThrow({
+        where: { id: product.id },
+        include: {
+          images: true,
+          store: true,
+          category: true,
+          deliveryOptions: { orderBy: { type: 'asc' } },
+        },
+      });
+      return this.normalizeProduct(complete);
     } catch (error) {
       this.writeError(error);
     }
@@ -201,11 +273,22 @@ class ProductsService {
       await this.ensurePublishable(tenantId, product.storeId);
     }
 
+    const { deliveryOptions, ...productData } = dto;
+    this.normalizeDeliveryOptions(deliveryOptions);
     try {
-      const updated = await this.db.client.product.update({
+      await this.db.client.product.update({
         where: { id },
-        data: dto,
-        include: { images: { orderBy: { sortOrder: 'asc' } }, store: true, category: true },
+        data: productData,
+      });
+      await this.replaceDeliveryOptions(tenantId, id, deliveryOptions);
+      const updated = await this.db.client.product.findUniqueOrThrow({
+        where: { id },
+        include: {
+          images: { orderBy: { sortOrder: 'asc' } },
+          store: true,
+          category: true,
+          deliveryOptions: { orderBy: { type: 'asc' } },
+        },
       });
       return this.normalizeProduct(updated);
     } catch (error) {
