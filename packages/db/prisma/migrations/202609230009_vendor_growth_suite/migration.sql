@@ -7,7 +7,7 @@ ALTER TABLE "orders"
   ADD COLUMN "coupon_code" VARCHAR(80);
 
 CREATE TABLE "promotions" (
-  "id" UUID NOT NULL,
+  "id" UUID NOT NULL DEFAULT gen_random_uuid(),
   "tenant_id" UUID NOT NULL,
   "store_id" UUID NOT NULL,
   "name" VARCHAR(160) NOT NULL,
