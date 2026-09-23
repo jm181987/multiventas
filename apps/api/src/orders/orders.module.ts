@@ -6,19 +6,22 @@ import { PaymentsModule } from '../payments/payments.module';
 import { MercadoPagoService } from '../payments/mercado-pago.service';
 import { AuthUser, CurrentUser, Roles, SystemContext } from '../common/decorators';
 import { JwtAuthGuard, RolesGuard } from '../common/guards';
-import { OrderStatus, ProductStatus, UserRole } from '@multiventas/db';
+import { DeliveryMethodType, NotificationType, OrderStatus, ProductStatus, UserRole } from '@multiventas/db';
 import { StorageService } from '../storage/storage.module';
 import { PromotionsModule, PromotionsService } from '../promotions/promotions.module';
+import { NotificationsModule, NotificationsService } from '../notifications/notifications.module';
 
 class CheckoutDto {
   @IsOptional() @IsObject() shippingAddress?: Record<string, unknown>;
   @IsOptional() @IsString() notes?: string;
   @IsOptional() @IsString() deviceId?: string;
   @IsOptional() @IsString() @MaxLength(80) couponCode?: string;
+  @IsOptional() @IsObject() deliverySelections?: Record<string, string>;
 }
 
 class CheckoutPreviewDto {
   @IsOptional() @IsString() @MaxLength(80) couponCode?: string;
+  @IsOptional() @IsObject() deliverySelections?: Record<string, string>;
 }
 
 class OrderStatusDto {
@@ -33,6 +36,7 @@ class OrdersService {
     private readonly mp: MercadoPagoService,
     private readonly storage: StorageService,
     private readonly promotions: PromotionsService,
+    private readonly notifications: NotificationsService,
   ) {}
 
   private normalizeDeviceId(deviceId?: string) {
@@ -73,38 +77,127 @@ class OrdersService {
     } as T;
   }
 
-  async preview(userId: string, couponCode?: string) {
+  private resolveDelivery(
+    product: any,
+    selectedType?: string,
+    requireExplicit = false,
+  ) {
+    const options = (product.deliveryOptions ?? []).filter((option: any) => option.isActive !== false);
+    if (!options.length) {
+      return {
+        type: null as DeliveryMethodType | null,
+        fee: 0,
+        details: 'Entrega a coordinar con el vendedor',
+        legacy: true,
+      };
+    }
+
+    if (!selectedType && options.length > 1) {
+      if (requireExplicit) {
+        throw new BadRequestException(`Elegí cómo querés recibir ${product.title}`);
+      }
+      return {
+        type: null as DeliveryMethodType | null,
+        fee: 0,
+        details: null,
+        legacy: false,
+        requiresSelection: true,
+      };
+    }
+
+    const selected = selectedType
+      ? options.find((option: any) => option.type === selectedType)
+      : options[0];
+
+    if (!selected) {
+      throw new BadRequestException(`El método de entrega elegido no está disponible para ${product.title}`);
+    }
+
+    return {
+      type: selected.type as DeliveryMethodType,
+      fee: selected.type === DeliveryMethodType.SHIPPING_PAID ? Number(selected.fee) : 0,
+      details: selected.details ?? null,
+      legacy: false,
+      requiresSelection: false,
+    };
+  }
+
+  async preview(
+    userId: string,
+    couponCode?: string,
+    deliverySelections: Record<string, string> = {},
+  ) {
     const cart = await this.cart.get(userId);
     if (!cart.length) throw new BadRequestException('El carrito está vacío');
 
     const products = await this.db.client.product.findMany({
       where: { id: { in: cart.map((x) => x.productId) }, status: ProductStatus.ACTIVE, deletedAt: null },
-      include: { store: true },
+      include: {
+        store: true,
+        deliveryOptions: { where: { isActive: true }, orderBy: { type: 'asc' } },
+      },
     });
     if (products.length !== cart.length) throw new BadRequestException('Hay productos no disponibles');
 
-    const grouped = new Map<string, { storeId: string; storeName: string; rows: Array<{ product: any; quantity: number }> }>();
+    const grouped = new Map<string, {
+      storeId: string;
+      storeName: string;
+      rows: Array<{ product: any; quantity: number }>;
+    }>();
+
     for (const item of cart) {
       const product = products.find((p) => p.id === item.productId)!;
-      const group = grouped.get(product.storeId) ?? { storeId: product.storeId, storeName: product.store.name, rows: [] };
+      const group = grouped.get(product.storeId) ?? {
+        storeId: product.storeId,
+        storeName: product.store.name,
+        rows: [],
+      };
       group.rows.push({ product, quantity: item.quantity });
       grouped.set(product.storeId, group);
     }
 
     let matched = false;
     const groups = [];
+
     for (const group of grouped.values()) {
-      const subtotal = Math.round(group.rows.reduce((sum, row) => sum + Number(row.product.price) * row.quantity, 0) * 100) / 100;
-      const applied = couponCode ? await this.promotions.applicable(group.storeId, couponCode, subtotal) : null;
+      const subtotal = Math.round(
+        group.rows.reduce((sum, row) => sum + Number(row.product.price) * row.quantity, 0) * 100,
+      ) / 100;
+      const applied = couponCode
+        ? await this.promotions.applicable(group.storeId, couponCode, subtotal)
+        : null;
       if (applied) matched = true;
+
+      const items = group.rows.map(({ product, quantity }) => {
+        const selectedDelivery = this.resolveDelivery(product, deliverySelections[product.id], false);
+        return {
+          productId: product.id,
+          title: product.title,
+          quantity,
+          deliveryOptions: (product.deliveryOptions ?? []).map((option: any) => ({
+            type: option.type,
+            fee: Number(option.fee),
+            details: option.details,
+          })),
+          selectedDelivery,
+        };
+      });
+
+      const shippingAmount = Math.round(
+        items.reduce((sum, item) => sum + Number(item.selectedDelivery.fee ?? 0), 0) * 100,
+      ) / 100;
       const discountAmount = applied?.discount ?? 0;
+      const total = Math.round((subtotal + shippingAmount - discountAmount) * 100) / 100;
+
       groups.push({
         storeId: group.storeId,
         storeName: group.storeName,
         subtotal,
+        shippingAmount,
         discountAmount,
-        total: Math.round((subtotal - discountAmount) * 100) / 100,
+        total,
         couponCode: applied?.code ?? null,
+        items,
       });
     }
 
@@ -115,8 +208,18 @@ class OrdersService {
     return {
       groups,
       subtotal: Math.round(groups.reduce((sum, group) => sum + group.subtotal, 0) * 100) / 100,
+      shippingAmount: Math.round(groups.reduce((sum, group) => sum + group.shippingAmount, 0) * 100) / 100,
       discountAmount: Math.round(groups.reduce((sum, group) => sum + group.discountAmount, 0) * 100) / 100,
       total: Math.round(groups.reduce((sum, group) => sum + group.total, 0) * 100) / 100,
+      requiresShippingAddress: groups.some((group) =>
+        group.items.some((item) =>
+          item.selectedDelivery.type === DeliveryMethodType.SHIPPING_PAID
+          || item.selectedDelivery.type === DeliveryMethodType.SHIPPING_FREE,
+        ),
+      ),
+      requiresDeliverySelection: groups.some((group) =>
+        group.items.some((item) => item.selectedDelivery.requiresSelection),
+      ),
     };
   }
 
@@ -126,29 +229,63 @@ class OrdersService {
 
     const products = await this.db.client.product.findMany({
       where: { id: { in: cart.map((x) => x.productId) }, status: ProductStatus.ACTIVE, deletedAt: null },
-      include: { store: true },
+      include: {
+        store: true,
+        deliveryOptions: { where: { isActive: true }, orderBy: { type: 'asc' } },
+      },
     });
     if (products.length !== cart.length) throw new BadRequestException('Hay productos no disponibles');
 
-    const grouped = new Map<string, { storeId: string; tenantId: string; rows: Array<{ product: any; quantity: number }> }>();
+    const grouped = new Map<string, {
+      storeId: string;
+      tenantId: string;
+      storeName: string;
+      rows: Array<{ product: any; quantity: number }>;
+    }>();
+
     for (const item of cart) {
       const product = products.find((p) => p.id === item.productId)!;
       if (product.stock < item.quantity) throw new BadRequestException(`Stock insuficiente para ${product.title}`);
-      const key = product.storeId;
-      const group = grouped.get(key) ?? { storeId: product.storeId, tenantId: product.tenantId, rows: [] };
+      const group = grouped.get(product.storeId) ?? {
+        storeId: product.storeId,
+        tenantId: product.tenantId,
+        storeName: product.store.name,
+        rows: [],
+      };
       group.rows.push({ product, quantity: item.quantity });
-      grouped.set(key, group);
+      grouped.set(product.storeId, group);
     }
 
+    const selections = dto.deliverySelections ?? {};
     const prepared = [];
     let couponMatched = false;
+
     for (const group of grouped.values()) {
-      const subtotal = Math.round(group.rows.reduce((sum, row) => sum + Number(row.product.price) * row.quantity, 0) * 100) / 100;
+      const subtotal = Math.round(
+        group.rows.reduce((sum, row) => sum + Number(row.product.price) * row.quantity, 0) * 100,
+      ) / 100;
       const applied = dto.couponCode
         ? await this.promotions.applicable(group.storeId, dto.couponCode, subtotal)
         : null;
       if (applied) couponMatched = true;
-      prepared.push({ group, subtotal, applied });
+
+      const deliveries = group.rows.map(({ product }) => ({
+        productId: product.id,
+        ...this.resolveDelivery(product, selections[product.id], true),
+      }));
+      const shippingAmount = Math.round(
+        deliveries.reduce((sum, delivery) => sum + Number(delivery.fee ?? 0), 0) * 100,
+      ) / 100;
+      const requiresAddress = deliveries.some((delivery) =>
+        delivery.type === DeliveryMethodType.SHIPPING_PAID
+        || delivery.type === DeliveryMethodType.SHIPPING_FREE,
+      );
+
+      if (requiresAddress && !String(dto.shippingAddress?.address ?? '').trim()) {
+        throw new BadRequestException('Ingresá una dirección para los productos con envío');
+      }
+
+      prepared.push({ group, subtotal, applied, deliveries, shippingAmount, requiresAddress });
     }
 
     if (dto.couponCode && !couponMatched) {
@@ -156,31 +293,40 @@ class OrdersService {
     }
 
     const checkouts = [];
-    for (const { group, subtotal, applied } of prepared) {
+    for (const { group, subtotal, applied, deliveries, shippingAmount, requiresAddress } of prepared) {
       const discountAmount = applied?.discount ?? 0;
-      const total = Math.round((subtotal - discountAmount) * 100) / 100;
+      const total = Math.round((subtotal + shippingAmount - discountAmount) * 100) / 100;
+      const deliveryMap = new Map(deliveries.map((delivery) => [delivery.productId, delivery]));
+
       const order = await this.db.client.order.create({
         data: {
           tenantId: group.tenantId,
           storeId: group.storeId,
           buyerId: userId,
           subtotal,
+          shippingAmount,
           discountAmount,
           total,
           promotionId: applied?.promotion.id,
           couponCode: applied?.code,
-          shippingAddress: dto.shippingAddress as any,
+          shippingAddress: requiresAddress ? dto.shippingAddress as any : undefined,
           notes: dto.notes,
           items: {
-            create: group.rows.map(({ product, quantity }) => ({
-              tenantId: group.tenantId,
-              productId: product.id,
-              title: product.title,
-              sku: product.sku,
-              quantity,
-              unitPrice: product.price,
-              total: Number(product.price) * quantity,
-            })),
+            create: group.rows.map(({ product, quantity }) => {
+              const delivery = deliveryMap.get(product.id)!;
+              return {
+                tenantId: group.tenantId,
+                productId: product.id,
+                title: product.title,
+                sku: product.sku,
+                quantity,
+                unitPrice: product.price,
+                total: Number(product.price) * quantity,
+                deliveryMethod: delivery.type,
+                deliveryAmount: delivery.fee,
+                deliveryDetails: delivery.details,
+              };
+            }),
           },
         },
       });
@@ -191,9 +337,29 @@ class OrdersService {
           data: { stock: { decrement: quantity } },
         });
         if (updated.count !== 1) throw new BadRequestException(`Stock modificado para ${product.title}`);
+
+        const remainingStock = product.stock - quantity;
+        if (product.stock > 5 && remainingStock <= 5) {
+          await this.notifications.createForVendor(group.tenantId, {
+            type: NotificationType.STOCK_LOW,
+            title: 'Stock bajo',
+            message: `${product.title} quedó con ${remainingStock} unidades disponibles.`,
+            href: '/vendor/productos',
+            metadata: { productId: product.id, remainingStock },
+          });
+        }
       }
 
       const preference = await this.mp.createPreference(order.id, this.normalizeDeviceId(dto.deviceId));
+
+      await this.notifications.createForVendor(group.tenantId, {
+        type: NotificationType.ORDER_CREATED,
+        title: 'Nuevo pedido',
+        message: `Recibiste un pedido en ${group.storeName}. Está pendiente de confirmación de pago.`,
+        href: '/vendor/pedidos',
+        metadata: { orderId: order.id, total },
+      });
+
       checkouts.push({
         orderId: order.id,
         preferenceId: preference.id,
@@ -201,6 +367,7 @@ class OrdersService {
         sandboxInitPoint: preference.sandbox_init_point,
         marketplaceFee: preference.marketplaceFee,
         subtotal,
+        shippingAmount,
         discountAmount,
         total,
         couponCode: applied?.code ?? null,
@@ -291,7 +458,10 @@ class OrdersService {
   async updateVendorStatus(tenantId: string, id: string, status: OrderStatus) {
     const order = await this.db.client.order.findFirst({
       where: { id, tenantId },
-      include: { items: true },
+      include: {
+        items: true,
+        store: { select: { name: true } },
+      },
     });
     if (!order) throw new BadRequestException('Pedido inválido');
 
@@ -307,6 +477,51 @@ class OrdersService {
 
     if (status === OrderStatus.CANCELLED && order.status === OrderStatus.PENDING) {
       await this.restoreStock(order.items);
+    }
+
+    if (status === OrderStatus.SHIPPED) {
+      await this.notifications.create({
+        userId: order.buyerId,
+        tenantId,
+        type: NotificationType.ORDER_SHIPPED,
+        title: 'Tu pedido fue despachado',
+        message: `${order.store.name} actualizó tu pedido como enviado.`,
+        href: '/mis-pedidos',
+        metadata: { orderId: order.id },
+      });
+    }
+
+    if (status === OrderStatus.DELIVERED) {
+      await this.notifications.create({
+        userId: order.buyerId,
+        tenantId,
+        type: NotificationType.ORDER_DELIVERED,
+        title: 'Pedido entregado',
+        message: `Tu pedido de ${order.store.name} fue marcado como entregado.`,
+        href: '/mis-pedidos',
+        metadata: { orderId: order.id },
+      });
+      await this.notifications.create({
+        userId: order.buyerId,
+        tenantId,
+        type: NotificationType.REVIEW_REQUEST,
+        title: '¿Cómo fue tu compra?',
+        message: 'Contá tu experiencia y ayudá a otros compradores con una reseña verificada.',
+        href: '/mis-pedidos',
+        metadata: { orderId: order.id },
+      });
+    }
+
+    if (status === OrderStatus.CANCELLED) {
+      await this.notifications.create({
+        userId: order.buyerId,
+        tenantId,
+        type: NotificationType.ORDER_CANCELLED,
+        title: 'Pedido cancelado',
+        message: `El pedido de ${order.store.name} fue cancelado.`,
+        href: '/mis-pedidos',
+        metadata: { orderId: order.id },
+      });
     }
 
     const updated = await this.db.client.order.findUniqueOrThrow({
@@ -351,6 +566,14 @@ class OrdersService {
 
     await this.restoreStock(order.items);
 
+    await this.notifications.createForVendor(order.tenantId, {
+      type: NotificationType.ORDER_CANCELLED,
+      title: 'Pedido cancelado',
+      message: 'El comprador canceló un pedido que todavía estaba pendiente de pago.',
+      href: '/vendor/pedidos',
+      metadata: { orderId: order.id },
+    });
+
     const updated = await this.db.client.order.findUniqueOrThrow({
       where: { id },
       include: {
@@ -381,7 +604,7 @@ class BuyerOrdersController {
   @SystemContext()
   @Post('checkout/preview')
   preview(@CurrentUser() user: AuthUser, @Body() dto: CheckoutPreviewDto) {
-    return this.orders.preview(user.sub, dto.couponCode);
+    return this.orders.preview(user.sub, dto.couponCode, dto.deliverySelections ?? {});
   }
 
   @SystemContext()
@@ -419,7 +642,7 @@ class VendorOrdersController {
 }
 
 @Module({
-  imports: [CartModule, PaymentsModule, PromotionsModule],
+  imports: [CartModule, PaymentsModule, PromotionsModule, NotificationsModule],
   controllers: [BuyerOrdersController, VendorOrdersController],
   providers: [OrdersService],
 })

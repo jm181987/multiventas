@@ -1,7 +1,7 @@
 'use client';
 
 import { FormEvent, useEffect, useState } from 'react';
-import { CheckCircle2, ShieldCheck, TicketPercent } from 'lucide-react';
+import { CheckCircle2, Download, Gift, MapPin, ShieldCheck, TicketPercent, Truck } from 'lucide-react';
 import { authApi } from '@/lib/api';
 import { money } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -14,6 +14,14 @@ declare global {
   }
 }
 
+type DeliveryType = 'SHIPPING_PAID' | 'SHIPPING_FREE' | 'PICKUP' | 'DIGITAL';
+
+type DeliveryOption = {
+  type: DeliveryType;
+  fee: number;
+  details?: string | null;
+};
+
 type CheckoutResult = {
   checkouts: Array<{
     orderId: string;
@@ -21,6 +29,7 @@ type CheckoutResult = {
     initPoint: string;
     marketplaceFee: number;
     subtotal?: number;
+    shippingAmount?: number;
     discountAmount?: number;
     total?: number;
     couponCode?: string | null;
@@ -32,14 +41,45 @@ type CheckoutPreview = {
     storeId: string;
     storeName: string;
     subtotal: number;
+    shippingAmount: number;
     discountAmount: number;
     total: number;
     couponCode: string | null;
+    items: Array<{
+      productId: string;
+      title: string;
+      quantity: number;
+      deliveryOptions: DeliveryOption[];
+      selectedDelivery: {
+        type: DeliveryType | null;
+        fee: number;
+        details?: string | null;
+        legacy?: boolean;
+        requiresSelection?: boolean;
+      };
+    }>;
   }>;
   subtotal: number;
+  shippingAmount: number;
   discountAmount: number;
   total: number;
+  requiresShippingAddress: boolean;
+  requiresDeliverySelection: boolean;
 };
+
+const deliveryLabel: Record<DeliveryType, string> = {
+  SHIPPING_PAID: 'Envío pago',
+  SHIPPING_FREE: 'Envío gratis',
+  PICKUP: 'Retiro en local',
+  DIGITAL: 'Entrega digital',
+};
+
+function DeliveryIcon({ type }: { type: DeliveryType }) {
+  if (type === 'SHIPPING_PAID') return <Truck className="size-4" />;
+  if (type === 'SHIPPING_FREE') return <Gift className="size-4" />;
+  if (type === 'PICKUP') return <MapPin className="size-4" />;
+  return <Download className="size-4" />;
+}
 
 export function CheckoutForm() {
   const [result, setResult] = useState<CheckoutResult>();
@@ -47,8 +87,9 @@ export function CheckoutForm() {
   const [loading, setLoading] = useState(false);
   const [deviceId, setDeviceId] = useState('');
   const [couponCode, setCouponCode] = useState('');
-  const [couponPreview, setCouponPreview] = useState<CheckoutPreview>();
-  const [checkingCoupon, setCheckingCoupon] = useState(false);
+  const [preview, setPreview] = useState<CheckoutPreview>();
+  const [checkingPreview, setCheckingPreview] = useState(true);
+  const [deliverySelections, setDeliverySelections] = useState<Record<string, string>>({});
 
   useEffect(() => {
     let attempts = 0;
@@ -79,28 +120,50 @@ export function CheckoutForm() {
     return () => window.clearInterval(timer);
   }, []);
 
-  async function applyCoupon() {
-    const code = couponCode.trim();
-    if (!code) {
-      setCouponPreview(undefined);
-      setError('');
-      return;
-    }
-
-    setCheckingCoupon(true);
+  async function refreshPreview(code: string, selections: Record<string, string>, seedDefaults = false) {
+    setCheckingPreview(true);
     setError('');
     try {
-      const preview = await authApi<CheckoutPreview>('/orders/checkout/preview', {
+      const data = await authApi<CheckoutPreview>('/orders/checkout/preview', {
         method: 'POST',
-        body: JSON.stringify({ couponCode: code }),
+        body: JSON.stringify({
+          couponCode: code.trim() || undefined,
+          deliverySelections: selections,
+        }),
       });
-      setCouponPreview(preview);
+      setPreview(data);
+
+      if (seedDefaults) {
+        const defaults: Record<string, string> = {};
+        for (const group of data.groups) {
+          for (const item of group.items) {
+            if (item.selectedDelivery?.type) defaults[item.productId] = item.selectedDelivery.type;
+          }
+        }
+        setDeliverySelections(defaults);
+      }
+
+      return data;
     } catch (e) {
-      setCouponPreview(undefined);
-      setError(e instanceof Error ? e.message : 'El cupón no pudo validarse');
+      setError(e instanceof Error ? e.message : 'No se pudo calcular el checkout');
+      return undefined;
     } finally {
-      setCheckingCoupon(false);
+      setCheckingPreview(false);
     }
+  }
+
+  useEffect(() => {
+    void refreshPreview('', {}, true);
+  }, []);
+
+  async function applyCoupon() {
+    await refreshPreview(couponCode, deliverySelections);
+  }
+
+  async function changeDelivery(productId: string, type: DeliveryType) {
+    const next = { ...deliverySelections, [productId]: type };
+    setDeliverySelections(next);
+    await refreshPreview(couponCode, next);
   }
 
   async function submit(e: FormEvent<HTMLFormElement>) {
@@ -108,18 +171,22 @@ export function CheckoutForm() {
     setError('');
     setLoading(true);
     const form = new FormData(e.currentTarget);
+
     try {
+      const shippingAddress = preview?.requiresShippingAddress ? {
+        address: form.get('address'),
+        city: form.get('city'),
+        department: form.get('department'),
+        postalCode: form.get('postalCode'),
+      } : undefined;
+
       const data = await authApi<CheckoutResult>('/orders/checkout', {
         method: 'POST',
         body: JSON.stringify({
-          shippingAddress: {
-            address: form.get('address'),
-            city: form.get('city'),
-            department: form.get('department'),
-            postalCode: form.get('postalCode'),
-          },
+          shippingAddress,
           notes: form.get('notes'),
           couponCode: couponCode.trim() || undefined,
+          deliverySelections,
           deviceId: deviceId || undefined,
         }),
       });
@@ -137,10 +204,10 @@ export function CheckoutForm() {
       <Card>
         <CardHeader><h2 className="text-xl font-bold">Pagos separados por vendedor</h2></CardHeader>
         <CardContent className="space-y-3">
-          <p className="text-sm text-muted-foreground">Mercado Pago Split 1:1 genera una transacción por vendedor. Completá cada pago:</p>
+          <p className="text-sm text-muted-foreground">Cada vendedor recibe su pago por separado. Completá cada operación:</p>
           {result.checkouts.map((checkout, index) => (
             <a key={checkout.orderId} href={checkout.initPoint} className="block">
-              <Button className="w-full">Pagar orden {index + 1}</Button>
+              <Button className="w-full">Pagar orden {index + 1} · {money(checkout.total ?? 0, 'UYU')}</Button>
             </a>
           ))}
         </CardContent>
@@ -149,14 +216,94 @@ export function CheckoutForm() {
   }
 
   return (
-    <form onSubmit={submit} className="grid gap-4">
-      <Input name="address" placeholder="Dirección" required />
-      <div className="grid gap-4 sm:grid-cols-2">
-        <Input name="city" placeholder="Ciudad" required />
-        <Input name="department" placeholder="Departamento" required />
-      </div>
-      <Input name="postalCode" placeholder="Código postal" />
-      <Input name="notes" placeholder="Notas de entrega" />
+    <form onSubmit={submit} className="grid gap-5">
+      <Card>
+        <CardHeader className="border-b">
+          <h2 className="text-xl font-black">Cómo querés recibir tu compra</h2>
+          <p className="text-sm text-muted-foreground">La entrega, retiro o envío digital es gestionado directamente por cada vendedor.</p>
+        </CardHeader>
+        <CardContent className="space-y-5 pt-5">
+          {checkingPreview && !preview ? (
+            <p className="text-sm text-muted-foreground">Cargando opciones de entrega…</p>
+          ) : (
+            preview?.groups.map((group) => (
+              <div key={group.storeId} className="space-y-3">
+                <div>
+                  <p className="font-black">{group.storeName}</p>
+                  <p className="text-xs text-muted-foreground">Elegí una opción para cada producto.</p>
+                </div>
+
+                {group.items.map((item) => (
+                  <div key={item.productId} className="rounded-xl border bg-slate-50/60 p-4">
+                    <div className="flex items-center justify-between gap-3">
+                      <div>
+                        <p className="font-bold">{item.title}</p>
+                        <p className="text-xs text-muted-foreground">Cantidad {item.quantity}</p>
+                      </div>
+                    </div>
+
+                    {item.deliveryOptions.length ? (
+                      <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                        {item.deliveryOptions.map((option) => {
+                          const checked = deliverySelections[item.productId] === option.type
+                            || (!deliverySelections[item.productId] && item.selectedDelivery.type === option.type);
+                          return (
+                            <label
+                              key={option.type}
+                              className={'cursor-pointer rounded-xl border p-3 transition ' + (checked ? 'border-indigo-400 bg-indigo-50' : 'bg-white hover:border-slate-300')}
+                            >
+                              <span className="flex items-start gap-2">
+                                <input
+                                  type="radio"
+                                  name={'delivery-' + item.productId}
+                                  checked={checked}
+                                  onChange={() => void changeDelivery(item.productId, option.type)}
+                                  className="mt-1"
+                                />
+                                <span className="min-w-0">
+                                  <span className="flex items-center gap-1.5 font-bold">
+                                    <DeliveryIcon type={option.type} />
+                                    {deliveryLabel[option.type]}
+                                  </span>
+                                  <span className="mt-1 block text-xs text-muted-foreground">
+                                    {option.type === 'SHIPPING_PAID' ? money(option.fee, 'UYU') : 'Sin costo adicional'}
+                                  </span>
+                                  {option.details && <span className="mt-1 block text-xs leading-5 text-muted-foreground">{option.details}</span>}
+                                </span>
+                              </span>
+                            </label>
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      <p className="mt-3 rounded-lg bg-white p-3 text-sm text-muted-foreground">Entrega a coordinar con el vendedor.</p>
+                    )}
+                  </div>
+                ))}
+              </div>
+            ))
+          )}
+        </CardContent>
+      </Card>
+
+      {preview?.requiresShippingAddress && (
+        <Card>
+          <CardHeader className="border-b">
+            <h2 className="text-xl font-black">Dirección de envío</h2>
+            <p className="text-sm text-muted-foreground">Solo se solicita porque elegiste envío para al menos un producto.</p>
+          </CardHeader>
+          <CardContent className="grid gap-4 pt-5">
+            <Input name="address" placeholder="Dirección" required />
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Input name="city" placeholder="Ciudad" required />
+              <Input name="department" placeholder="Departamento" required />
+            </div>
+            <Input name="postalCode" placeholder="Código postal" />
+          </CardContent>
+        </Card>
+      )}
+
+      <Input name="notes" placeholder="Notas para el vendedor" />
 
       <div className="rounded-xl border border-dashed bg-indigo-50/40 p-4">
         <label className="block text-sm font-semibold">
@@ -169,42 +316,54 @@ export function CheckoutForm() {
                 placeholder="Ej: BIENVENIDA10"
                 autoComplete="off"
                 value={couponCode}
-                onChange={(e) => {
-                  setCouponCode(e.target.value.toUpperCase().replace(/\s/g, ''));
-                  setCouponPreview(undefined);
-                }}
+                onChange={(e) => setCouponCode(e.target.value.toUpperCase().replace(/\s/g, ''))}
               />
             </div>
-            <Button type="button" variant="outline" onClick={applyCoupon} disabled={checkingCoupon || !couponCode.trim()}>
-              {checkingCoupon ? 'Validando…' : 'Aplicar'}
+            <Button type="button" variant="outline" onClick={applyCoupon} disabled={checkingPreview || !couponCode.trim()}>
+              {checkingPreview ? 'Calculando…' : 'Aplicar'}
             </Button>
           </div>
         </label>
-        <p className="mt-2 text-xs text-muted-foreground">Si el carrito tiene varias tiendas, el código se aplica únicamente a la tienda que emitió la promoción.</p>
 
-        {couponPreview && couponPreview.discountAmount > 0 && (
+        {preview && preview.discountAmount > 0 && (
           <div className="mt-3 rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800">
             <div className="flex items-center gap-2 font-bold"><CheckCircle2 className="size-4" /> Cupón aplicado</div>
             <div className="mt-2 flex items-center justify-between">
-              <span>Descuento</span><strong>-{money(couponPreview.discountAmount, 'UYU')}</strong>
-            </div>
-            <div className="mt-1 flex items-center justify-between border-t border-emerald-200 pt-2">
-              <span>Total con descuento</span><strong>{money(couponPreview.total, 'UYU')}</strong>
+              <span>Descuento</span><strong>-{money(preview.discountAmount, 'UYU')}</strong>
             </div>
           </div>
         )}
       </div>
 
+      {preview && (
+        <Card>
+          <CardContent className="space-y-2 pt-5 text-sm">
+            <div className="flex justify-between"><span className="text-muted-foreground">Productos</span><span>{money(preview.subtotal, 'UYU')}</span></div>
+            <div className="flex justify-between"><span className="text-muted-foreground">Entrega</span><span>{preview.shippingAmount > 0 ? money(preview.shippingAmount, 'UYU') : 'Sin costo'}</span></div>
+            {preview.discountAmount > 0 && <div className="flex justify-between text-emerald-700"><span>Descuento</span><span>-{money(preview.discountAmount, 'UYU')}</span></div>}
+            <div className="flex justify-between border-t pt-3 text-lg font-black"><span>Total</span><span>{money(preview.total, 'UYU')}</span></div>
+          </CardContent>
+        </Card>
+      )}
+
       <div className="flex items-start gap-2 rounded-lg border bg-muted/20 p-3 text-xs text-muted-foreground">
         <ShieldCheck className="mt-0.5 size-4 shrink-0 text-emerald-600" />
         <p>
-          Pago seguro: los datos de tarjeta se ingresan directamente en Mercado Pago y nunca pasan por SeVende.
+          Pago seguro: los datos de tarjeta se ingresan directamente en Mercado Pago. SeVende facilita la compra, pero no presta ni gestiona el servicio logístico.
           {deviceId ? ' Protección antifraude del dispositivo activa.' : ' Preparando protección antifraude…'}
         </p>
       </div>
 
       {error && <p className="rounded-md bg-red-50 p-3 text-sm text-red-700">{error}</p>}
-      <Button size="lg" disabled={loading}>{loading ? 'Preparando pago…' : 'Pagar con Mercado Pago'}</Button>
+      {preview?.requiresDeliverySelection && (
+        <p className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm font-medium text-amber-800">
+          Elegí una forma de entrega para todos los productos antes de continuar.
+        </p>
+      )}
+
+      <Button size="lg" disabled={loading || checkingPreview || !preview || preview.requiresDeliverySelection}>
+        {loading ? 'Preparando pago…' : 'Pagar con Mercado Pago'}
+      </Button>
     </form>
   );
 }

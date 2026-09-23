@@ -13,10 +13,11 @@ import {
 } from '@nestjs/common';
 import { Type } from 'class-transformer';
 import { IsIn, IsInt, IsOptional, IsString, Max, MaxLength, Min } from 'class-validator';
-import { OrderStatus, ReviewStatus, UserRole } from '@multiventas/db';
+import { NotificationType, OrderStatus, ReviewStatus, UserRole } from '@multiventas/db';
 import { DbService } from '../common/db.service';
 import { AuthUser, CurrentUser, Roles, SystemContext } from '../common/decorators';
 import { JwtAuthGuard, RolesGuard } from '../common/guards';
+import { NotificationsModule, NotificationsService } from '../notifications/notifications.module';
 
 class CreateReviewDto {
   @IsString() orderItemId!: string;
@@ -41,7 +42,7 @@ class AdminReviewQueryDto {
 
 @Injectable()
 class ReviewsService {
-  constructor(private readonly db: DbService) {}
+  constructor(private readonly db: DbService, private readonly notifications: NotificationsService) {}
 
   private publicBuyerName(name: string) {
     const parts = name.trim().split(/\s+/).filter(Boolean);
@@ -134,6 +135,7 @@ class ReviewsService {
       },
       include: {
         order: { select: { storeId: true, tenantId: true } },
+        product: { select: { title: true } },
         review: { select: { id: true } },
       },
     });
@@ -143,7 +145,7 @@ class ReviewsService {
     }
     if (item.review) throw new BadRequestException('Ya opinaste sobre este producto en este pedido');
 
-    return this.db.client.review.create({
+    const created = await this.db.client.review.create({
       data: {
         tenantId: item.order.tenantId,
         storeId: item.order.storeId,
@@ -163,6 +165,16 @@ class ReviewsService {
         orderItemId: true,
       },
     });
+
+    await this.notifications.createForVendor(item.order.tenantId, {
+      type: NotificationType.REVIEW_RECEIVED,
+      title: 'Nueva reseña recibida',
+      message: `Un comprador calificó ${item.product?.title ?? 'uno de tus productos'} con ${dto.rating} estrellas.`,
+      href: '/vendor/productos',
+      metadata: { reviewId: created.id, productId: item.productId },
+    });
+
+    return created;
   }
 
   async adminList(query: AdminReviewQueryDto) {
@@ -185,8 +197,8 @@ class ReviewsService {
     return { items, total, page: query.page, limit: query.limit };
   }
 
-  moderate(id: string, status: ReviewStatus) {
-    return this.db.client.review.update({
+  async moderate(id: string, status: ReviewStatus) {
+    const review = await this.db.client.review.update({
       where: { id },
       data: { status },
       include: {
@@ -195,6 +207,20 @@ class ReviewsService {
         store: { select: { id: true, name: true, slug: true } },
       },
     });
+
+    if (status === ReviewStatus.PUBLISHED) {
+      await this.notifications.create({
+        userId: review.buyerId,
+        tenantId: review.tenantId,
+        type: NotificationType.REVIEW_PUBLISHED,
+        title: 'Tu reseña fue publicada',
+        message: `Tu opinión sobre ${review.product.title} ya es visible en SeVende.`,
+        href: `/productos/${review.product.id}`,
+        metadata: { reviewId: review.id, productId: review.product.id },
+      });
+    }
+
+    return review;
   }
 }
 
@@ -248,6 +274,7 @@ class AdminReviewsController {
 }
 
 @Module({
+  imports: [NotificationsModule],
   controllers: [PublicReviewsController, BuyerReviewsController, AdminReviewsController],
   providers: [ReviewsService],
 })

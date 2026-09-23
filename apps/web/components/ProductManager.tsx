@@ -2,7 +2,7 @@
 
 import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Archive, Boxes, ImagePlus, PackagePlus, Pencil, Search, Trash2, X } from 'lucide-react';
+import { Archive, Boxes, Download, Gift, ImagePlus, MapPin, PackagePlus, Pencil, Search, Trash2, Truck, X } from 'lucide-react';
 import { authApi, publicApi } from '@/lib/api';
 import { Product, ProductImage, Store } from '@/lib/types';
 import { money } from '@/lib/utils';
@@ -26,6 +26,15 @@ type FormState = {
   currency: string;
   stock: string;
   status: ProductStatus;
+  shippingPaid: boolean;
+  shippingFee: string;
+  shippingPaidDetails: string;
+  shippingFree: boolean;
+  shippingFreeDetails: string;
+  pickup: boolean;
+  pickupDetails: string;
+  digital: boolean;
+  digitalDetails: string;
 };
 
 const emptyForm: FormState = {
@@ -39,6 +48,15 @@ const emptyForm: FormState = {
   currency: 'UYU',
   stock: '0',
   status: 'DRAFT',
+  shippingPaid: false,
+  shippingFee: '',
+  shippingPaidDetails: '',
+  shippingFree: false,
+  shippingFreeDetails: '',
+  pickup: false,
+  pickupDetails: '',
+  digital: false,
+  digitalDetails: '',
 };
 
 function slugify(value: string) {
@@ -175,6 +193,15 @@ export function ProductManager() {
         currency: selected.currency ?? 'UYU',
         stock: String(selected.stock),
         status: selected.status,
+        shippingPaid: Boolean(selected.deliveryOptions?.some((option) => option.type === 'SHIPPING_PAID')),
+        shippingFee: String(selected.deliveryOptions?.find((option) => option.type === 'SHIPPING_PAID')?.fee ?? ''),
+        shippingPaidDetails: selected.deliveryOptions?.find((option) => option.type === 'SHIPPING_PAID')?.details ?? '',
+        shippingFree: Boolean(selected.deliveryOptions?.some((option) => option.type === 'SHIPPING_FREE')),
+        shippingFreeDetails: selected.deliveryOptions?.find((option) => option.type === 'SHIPPING_FREE')?.details ?? '',
+        pickup: Boolean(selected.deliveryOptions?.some((option) => option.type === 'PICKUP')),
+        pickupDetails: selected.deliveryOptions?.find((option) => option.type === 'PICKUP')?.details ?? '',
+        digital: Boolean(selected.deliveryOptions?.some((option) => option.type === 'DIGITAL')),
+        digitalDetails: selected.deliveryOptions?.find((option) => option.type === 'DIGITAL')?.details ?? '',
       });
       setSlugTouched(true);
       setError('');
@@ -183,6 +210,12 @@ export function ProductManager() {
 
   const saveMutation = useMutation({
     mutationFn: async () => {
+      const deliveryOptions = [
+        ...(form.shippingPaid ? [{ type: 'SHIPPING_PAID', fee: Number(form.shippingFee), details: form.shippingPaidDetails.trim() || undefined }] : []),
+        ...(form.shippingFree ? [{ type: 'SHIPPING_FREE', fee: 0, details: form.shippingFreeDetails.trim() || undefined }] : []),
+        ...(form.pickup ? [{ type: 'PICKUP', fee: 0, details: form.pickupDetails.trim() || undefined }] : []),
+        ...(form.digital ? [{ type: 'DIGITAL', fee: 0, details: form.digitalDetails.trim() || undefined }] : []),
+      ];
       const payload = {
         storeId: form.storeId,
         categoryId: form.categoryId || undefined,
@@ -194,6 +227,7 @@ export function ProductManager() {
         currency: form.currency,
         stock: Number(form.stock),
         status: form.status,
+        deliveryOptions,
       };
       if (editingId === 'new') {
         const { status: _status, ...createPayload } = payload;
@@ -260,6 +294,18 @@ export function ProductManager() {
     if (!form.slug.trim()) return setError('Ingresa un slug válido.');
     if (!Number.isFinite(Number(form.price)) || Number(form.price) <= 0) return setError('Ingresa un precio válido.');
     if (!Number.isInteger(Number(form.stock)) || Number(form.stock) < 0) return setError('Ingresa un stock válido.');
+    if (![form.shippingPaid, form.shippingFree, form.pickup, form.digital].some(Boolean)) {
+      return setError('Seleccioná al menos una forma de entrega.');
+    }
+    if (form.shippingPaid && (!Number.isFinite(Number(form.shippingFee)) || Number(form.shippingFee) <= 0)) {
+      return setError('Ingresá un costo válido para el envío pago.');
+    }
+    if (form.pickup && !form.pickupDetails.trim()) {
+      return setError('Indicá la dirección o instrucciones para el retiro en local.');
+    }
+    if (form.digital && !form.digitalDetails.trim()) {
+      return setError('Indicá cómo se realizará la entrega digital.');
+    }
     saveMutation.mutate();
   }
 
@@ -315,6 +361,36 @@ export function ProductManager() {
                 <label className="space-y-1 text-sm font-medium">Stock<Input type="number" min="0" step="1" value={form.stock} onChange={(e) => setForm({ ...form, stock: e.target.value })} required /></label>
               </div>
               <label className="block space-y-1 text-sm font-medium">Descripción<textarea className="min-h-28 w-full rounded-md border bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary/20" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} /></label>
+
+              <div className="space-y-3 rounded-2xl border bg-slate-50/60 p-4">
+                <div>
+                  <h3 className="font-black">Formas de entrega</h3>
+                  <p className="text-xs text-muted-foreground">SeVende cobra el importe configurado, pero la entrega es gestionada por tu tienda. Podés activar más de una opción.</p>
+                </div>
+
+                <div className="grid gap-3 lg:grid-cols-2">
+                  <label className="rounded-xl border bg-white p-4">
+                    <span className="flex items-center gap-2 font-bold"><input type="checkbox" checked={form.shippingPaid} onChange={(e) => setForm({ ...form, shippingPaid: e.target.checked })} /><Truck className="size-4 text-indigo-600" /> Envío pago</span>
+                    {form.shippingPaid && <div className="mt-3 space-y-2"><Input type="number" min="0.01" step="0.01" placeholder="Costo fijo de envío" value={form.shippingFee} onChange={(e) => setForm({ ...form, shippingFee: e.target.value })} /><Input placeholder="Zona o instrucciones (opcional)" value={form.shippingPaidDetails} onChange={(e) => setForm({ ...form, shippingPaidDetails: e.target.value })} /></div>}
+                  </label>
+
+                  <label className="rounded-xl border bg-white p-4">
+                    <span className="flex items-center gap-2 font-bold"><input type="checkbox" checked={form.shippingFree} onChange={(e) => setForm({ ...form, shippingFree: e.target.checked })} /><Gift className="size-4 text-emerald-600" /> Envío gratis</span>
+                    {form.shippingFree && <Input className="mt-3" placeholder="Zona o condiciones (opcional)" value={form.shippingFreeDetails} onChange={(e) => setForm({ ...form, shippingFreeDetails: e.target.value })} />}
+                  </label>
+
+                  <label className="rounded-xl border bg-white p-4">
+                    <span className="flex items-center gap-2 font-bold"><input type="checkbox" checked={form.pickup} onChange={(e) => setForm({ ...form, pickup: e.target.checked })} /><MapPin className="size-4 text-violet-600" /> Retiro en local</span>
+                    {form.pickup && <Input className="mt-3" placeholder="Dirección e instrucciones de retiro" value={form.pickupDetails} onChange={(e) => setForm({ ...form, pickupDetails: e.target.value })} />}
+                  </label>
+
+                  <label className="rounded-xl border bg-white p-4">
+                    <span className="flex items-center gap-2 font-bold"><input type="checkbox" checked={form.digital} onChange={(e) => setForm({ ...form, digital: e.target.checked })} /><Download className="size-4 text-cyan-600" /> Entrega digital</span>
+                    {form.digital && <Input className="mt-3" placeholder="Ej: se envía por email dentro de 24 h" value={form.digitalDetails} onChange={(e) => setForm({ ...form, digitalDetails: e.target.value })} />}
+                  </label>
+                </div>
+              </div>
+
               {error && <p className="rounded-md bg-red-50 p-3 text-sm text-red-700">{error}</p>}
               <div className="flex flex-wrap gap-2">
                 <Button type="submit" disabled={saveMutation.isPending}>{saveMutation.isPending ? 'Guardando…' : 'Guardar producto'}</Button>

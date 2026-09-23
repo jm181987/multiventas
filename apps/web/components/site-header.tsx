@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { useCartUi } from '@/store/cart';
 import { CartDrawer } from './CartDrawer';
 import { useAuthSession } from '@/components/auth-provider';
+import { NotificationBell } from '@/components/NotificationBell';
 
 export function SiteHeader() {
   const toggle = useCartUi((s) => s.toggle);
@@ -50,6 +51,8 @@ export function SiteHeader() {
               <Link key={href} href={href} className={navClass}>{label}</Link>
             ))}
           </nav>
+
+          <NotificationBell dark={premiumHome} />
 
           <Button
             variant="outline"

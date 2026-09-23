@@ -20,6 +20,7 @@ import { StorageModule } from './storage/storage.module';
 import { HealthModule } from './health/health.module';
 import { PromotionsModule } from './promotions/promotions.module';
 import { ReviewsModule } from './reviews/reviews.module';
+import { NotificationsModule } from './notifications/notifications.module';
 
 @Module({
   imports: [
@@ -40,6 +41,7 @@ import { ReviewsModule } from './reviews/reviews.module';
     CommissionsModule,
     PromotionsModule,
     ReviewsModule,
+    NotificationsModule,
     AdminModule,
     HealthModule,
   ],

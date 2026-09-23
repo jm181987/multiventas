@@ -43,6 +43,9 @@ type BuyerOrder = {
     quantity: number;
     unitPrice: string | number;
     total: string | number;
+    deliveryMethod?: 'SHIPPING_PAID' | 'SHIPPING_FREE' | 'PICKUP' | 'DIGITAL' | null;
+    deliveryAmount?: string | number;
+    deliveryDetails?: string | null;
     product?: { id: string; slug: string; images?: Array<{ url: string }> } | null;
     review?: {
       id: string;
@@ -57,10 +60,18 @@ type BuyerOrder = {
 const label: Record<OrderStatus, string> = {
   PENDING: 'Pendiente de pago',
   PAID: 'Pagado',
-  SHIPPED: 'En camino',
+  SHIPPED: 'En proceso',
   DELIVERED: 'Entregado',
   CANCELLED: 'Cancelado',
 };
+
+function orderStatusLabel(order: BuyerOrder) {
+  if (order.status !== 'SHIPPED') return label[order.status];
+  const methods = order.items.map((item) => item.deliveryMethod).filter(Boolean);
+  if (methods.length && methods.every((method) => method === 'PICKUP')) return 'Listo para retiro';
+  if (methods.length && methods.every((method) => method === 'DIGITAL')) return 'Entrega enviada';
+  return 'En camino';
+}
 
 function statusIcon(status: OrderStatus) {
   if (status === 'PAID') return CheckCircle2;
@@ -68,6 +79,14 @@ function statusIcon(status: OrderStatus) {
   if (status === 'DELIVERED') return PackageCheck;
   if (status === 'CANCELLED') return XCircle;
   return Clock3;
+}
+
+function deliveryLabel(method?: string | null) {
+  if (method === 'SHIPPING_PAID') return 'Envío pago';
+  if (method === 'SHIPPING_FREE') return 'Envío gratis';
+  if (method === 'PICKUP') return 'Retiro en local';
+  if (method === 'DIGITAL') return 'Entrega digital';
+  return 'Entrega a coordinar';
 }
 
 function statusClass(status: OrderStatus) {
@@ -130,7 +149,7 @@ export function BuyerOrdersList() {
             ['Todos', counters.all, 'ALL'],
             ['Pendientes', counters.pending, 'PENDING'],
             ['Pagados', counters.paid, 'PAID'],
-            ['En camino', counters.active, 'SHIPPED'],
+            ['En proceso', counters.active, 'SHIPPED'],
             ['Entregados', counters.delivered, 'DELIVERED'],
           ].map(([text, value, status]) => (
             <button
@@ -184,7 +203,7 @@ export function BuyerOrdersList() {
                         <div>
                           <div className="flex flex-wrap items-center gap-2">
                             <p className="font-black">#{order.id.slice(0, 8).toUpperCase()}</p>
-                            <Badge className={statusClass(order.status)}><Icon className="mr-1 size-3.5" />{label[order.status]}</Badge>
+                            <Badge className={statusClass(order.status)}><Icon className="mr-1 size-3.5" />{orderStatusLabel(order)}</Badge>
                           </div>
                           <Link href={`/tienda/${order.store.slug}`} className="mt-1 inline-block font-semibold hover:underline">{order.store.name}</Link>
                           <p className="text-xs text-muted-foreground">{new Date(order.createdAt).toLocaleString('es-UY')}</p>
@@ -237,6 +256,11 @@ export function BuyerOrdersList() {
                                 <div className="min-w-0">
                                   {item.productId ? <Link href={`/productos/${item.productId}`} className="truncate font-medium hover:underline">{item.title}</Link> : <p className="truncate font-medium">{item.title}</p>}
                                   <p className="text-xs text-muted-foreground">Cantidad {item.quantity}{item.sku ? ` · ${item.sku}` : ''}</p>
+                                  <p className="mt-1 text-xs font-semibold text-indigo-700">
+                                    {deliveryLabel(item.deliveryMethod)}
+                                    {Number(item.deliveryAmount ?? 0) > 0 ? ` · ${money(Number(item.deliveryAmount), order.currency)}` : ''}
+                                  </p>
+                                  {item.deliveryDetails && <p className="mt-0.5 text-xs text-muted-foreground">{item.deliveryDetails}</p>}
                                   {order.status === 'DELIVERED' && item.productId && (
                                     <ProductReviewAction orderItemId={item.id} productTitle={item.title} review={item.review} />
                                   )}
@@ -249,11 +273,19 @@ export function BuyerOrdersList() {
                       </div>
 
                       <div className="space-y-4 text-sm">
-                        <div><p className="font-bold">Entrega</p><p className="text-muted-foreground">{addressText(order.shippingAddress)}</p></div>
+                        <div>
+                          <p className="font-bold">Entrega</p>
+                          <p className="text-muted-foreground">
+                            {order.shippingAddress ? addressText(order.shippingAddress) : 'Según la modalidad elegida en cada producto'}
+                          </p>
+                        </div>
                         <div><p className="font-bold">Pago</p><p className="text-muted-foreground">{order.payment ? `${order.payment.provider} · ${order.payment.status}` : 'Pendiente'}</p></div>
                         {order.notes && <div><p className="font-bold">Notas</p><p className="text-muted-foreground">{order.notes}</p></div>}
                         <div className="border-t pt-3">
                           <div className="flex justify-between"><span>Subtotal</span><span>{money(Number(order.subtotal), order.currency)}</span></div>
+                          {Number(order.shippingAmount ?? 0) > 0 && (
+                            <div className="mt-1 flex justify-between"><span>Entrega</span><span>{money(Number(order.shippingAmount), order.currency)}</span></div>
+                          )}
                           {Number(order.discountAmount ?? 0) > 0 && (
                             <div className="mt-1 flex justify-between text-emerald-700">
                               <span>Descuento{order.couponCode ? ` · ${order.couponCode}` : ''}</span>

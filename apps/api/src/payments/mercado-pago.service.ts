@@ -282,7 +282,15 @@ export class MercadoPagoService {
         method: 'POST',
         headers: deviceId ? { 'X-meli-session-id': deviceId } : undefined,
         body: JSON.stringify({
-          items: this.preferenceItems(order.items, Number(order.discountAmount)).map((item) => ({
+          items: [
+            ...this.preferenceItems(order.items, Number(order.discountAmount)),
+            ...(Number(order.shippingAmount) > 0 ? [{
+              id: `shipping-${order.id}`,
+              title: 'Envío',
+              quantity: 1,
+              unit_price: Number(order.shippingAmount),
+            }] : []),
+          ].map((item) => ({
             ...item,
             currency_id: order.currency,
           })),
@@ -424,7 +432,7 @@ export class MercadoPagoService {
       });
     }
 
-    return { processed: true, orderId, status };
+    return { processed: true, orderId, status, changed: previousStatus !== status };
   }
 
   @Cron(CronExpression.EVERY_DAY_AT_3AM)
