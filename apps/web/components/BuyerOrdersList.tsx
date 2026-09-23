@@ -10,6 +10,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { OrderStatusTimeline } from '@/components/OrderStatusTimeline';
+import { ProductReviewAction } from '@/components/ProductReviewAction';
 
 type OrderStatus = 'PENDING' | 'PAID' | 'SHIPPED' | 'DELIVERED' | 'CANCELLED';
 
@@ -43,6 +44,13 @@ type BuyerOrder = {
     unitPrice: string | number;
     total: string | number;
     product?: { id: string; slug: string; images?: Array<{ url: string }> } | null;
+    review?: {
+      id: string;
+      rating: number;
+      comment?: string | null;
+      status: 'PENDING' | 'PUBLISHED' | 'REJECTED';
+      createdAt: string;
+    } | null;
   }>;
 };
 
@@ -229,6 +237,9 @@ export function BuyerOrdersList() {
                                 <div className="min-w-0">
                                   {item.productId ? <Link href={`/productos/${item.productId}`} className="truncate font-medium hover:underline">{item.title}</Link> : <p className="truncate font-medium">{item.title}</p>}
                                   <p className="text-xs text-muted-foreground">Cantidad {item.quantity}{item.sku ? ` · ${item.sku}` : ''}</p>
+                                  {order.status === 'DELIVERED' && item.productId && (
+                                    <ProductReviewAction orderItemId={item.id} productTitle={item.title} review={item.review} />
+                                  )}
                                 </div>
                               </div>
                               <p className="shrink-0 font-semibold">{money(Number(item.total), order.currency)}</p>
