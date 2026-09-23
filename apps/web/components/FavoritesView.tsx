@@ -3,7 +3,8 @@
 import Link from 'next/link';
 import { Heart } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
-import { authApi, hasAuth } from '@/lib/api';
+import { authApi } from '@/lib/api';
+import { useAuthSession } from '@/components/auth-provider';
 import { Product } from '@/lib/types';
 import { ProductGrid } from '@/components/ProductGrid';
 import { Button } from '@/components/ui/button';
@@ -16,14 +17,16 @@ type FavoriteRow = {
 };
 
 export function FavoritesView() {
-  const authenticated = hasAuth();
+  const { user, loading } = useAuthSession();
   const query = useQuery({
     queryKey: ['favorites'],
     queryFn: () => authApi<FavoriteRow[]>('/favorites'),
-    enabled: authenticated,
+    enabled: Boolean(user),
   });
 
-  if (!authenticated) {
+  if (loading) return <p className="text-sm text-muted-foreground">Cargando favoritos…</p>;
+
+  if (!user) {
     return (
       <Card>
         <CardContent className="grid place-items-center gap-4 p-12 text-center">
