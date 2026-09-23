@@ -189,6 +189,74 @@ export class MercadoPagoService {
     });
   }
 
+  private preferenceItems(
+    items: Array<{ id: string; productId: string | null; title: string; quantity: number; unitPrice: unknown }>,
+    discountAmount: number,
+  ) {
+    const rows = items.map((item) => ({
+      item,
+      unitCents: Math.round(Number(item.unitPrice) * 100),
+      lineCents: Math.round(Number(item.unitPrice) * item.quantity * 100),
+    }));
+    const subtotalCents = rows.reduce((sum, row) => sum + row.lineCents, 0);
+    const discountCents = Math.min(
+      Math.max(0, Math.round(discountAmount * 100)),
+      Math.max(0, subtotalCents - 100),
+    );
+
+    if (!discountCents) {
+      return rows.map(({ item }) => ({
+        id: item.productId ?? item.id,
+        title: item.title,
+        quantity: item.quantity,
+        unit_price: Number(item.unitPrice),
+      }));
+    }
+
+    let remainingDiscount = discountCents;
+    let remainingSubtotal = subtotalCents;
+    const output: Array<{ id: string; title: string; quantity: number; unit_price: number }> = [];
+
+    rows.forEach(({ item, unitCents, lineCents }, index) => {
+      const isLast = index === rows.length - 1;
+      const lineDiscount = isLast
+        ? remainingDiscount
+        : Math.min(
+            lineCents - item.quantity,
+            Math.round((remainingDiscount * lineCents) / Math.max(1, remainingSubtotal)),
+          );
+
+      remainingDiscount -= lineDiscount;
+      remainingSubtotal -= lineCents;
+
+      const baseDiscountPerUnit = Math.floor(lineDiscount / item.quantity);
+      const extraCentUnits = lineDiscount % item.quantity;
+      const regularPriceCents = unitCents - baseDiscountPerUnit;
+      const extraDiscountPriceCents = regularPriceCents - 1;
+
+      if (extraCentUnits > 0) {
+        output.push({
+          id: item.productId ?? item.id,
+          title: item.title,
+          quantity: extraCentUnits,
+          unit_price: extraDiscountPriceCents / 100,
+        });
+      }
+
+      const regularUnits = item.quantity - extraCentUnits;
+      if (regularUnits > 0) {
+        output.push({
+          id: item.productId ?? item.id,
+          title: item.title,
+          quantity: regularUnits,
+          unit_price: regularPriceCents / 100,
+        });
+      }
+    });
+
+    return output;
+  }
+
   async createPreference(orderId: string, deviceId?: string): Promise<PreferenceResponse & { marketplaceFee: number }> {
     const order = await this.db.client.order.findUnique({
       where: { id: orderId },
@@ -214,11 +282,8 @@ export class MercadoPagoService {
         method: 'POST',
         headers: deviceId ? { 'X-meli-session-id': deviceId } : undefined,
         body: JSON.stringify({
-          items: order.items.map((item) => ({
-            id: item.productId ?? item.id,
-            title: item.title,
-            quantity: item.quantity,
-            unit_price: Number(item.unitPrice),
+          items: this.preferenceItems(order.items, Number(order.discountAmount)).map((item) => ({
+            ...item,
             currency_id: order.currency,
           })),
           marketplace_fee: marketplaceFee,
@@ -265,7 +330,7 @@ export class MercadoPagoService {
         amount: marketplaceFee,
         status: CommissionStatus.PENDING,
       },
-      update: { paymentId: payment.id, rate: feeRate, amount: marketplaceFee },
+      update: { paymentId: payment.id, rate: feeRate, baseAmount: order.total, amount: marketplaceFee },
     });
 
     return { ...preference, marketplaceFee };
