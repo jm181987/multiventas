@@ -12,6 +12,7 @@ const TENANT_MODELS = new Set([
   'OAuthToken',
   'Commission',
   'Review',
+  'ProductDeliveryOption',
   'AuditLog',
 ]);
 
