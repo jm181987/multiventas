@@ -432,7 +432,7 @@ export class MercadoPagoService {
       });
     }
 
-    return { processed: true, orderId, status };
+    return { processed: true, orderId, status, changed: previousStatus !== status };
   }
 
   @Cron(CronExpression.EVERY_DAY_AT_3AM)
