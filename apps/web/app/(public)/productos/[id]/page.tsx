@@ -1,25 +1,53 @@
 import Image from 'next/image';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { ArrowLeft, ArrowRight, Store as StoreIcon } from 'lucide-react';
+import { ArrowLeft, ArrowRight, ShieldCheck, Store as StoreIcon } from 'lucide-react';
 import { publicApi } from '@/lib/api';
 import { Product, ProductSearch } from '@/lib/types';
 import { money } from '@/lib/utils';
 import { ProductGrid } from '@/components/ProductGrid';
 import { Badge } from '@/components/ui/badge';
 import { ProductPurchasePanel } from '@/components/ProductPurchasePanel';
+import { ReviewStars } from '@/components/ReviewStars';
 
 export const dynamic = 'force-dynamic';
+
+type ReviewSummary = {
+  average: number;
+  count: number;
+  distribution: Array<{ rating: number; count: number }>;
+};
+
+type ProductReviews = {
+  items: Array<{
+    id: string;
+    rating: number;
+    comment?: string | null;
+    createdAt: string;
+    verifiedPurchase: boolean;
+    buyerName: string;
+  }>;
+  total: number;
+  page: number;
+  limit: number;
+  summary: ReviewSummary;
+};
 
 export default async function ProductPage({ params }: { params: { id: string } }) {
   const product = await publicApi<Product>(`/products/${params.id}`).catch(() => null);
   if (!product) notFound();
 
-  const related = await publicApi<ProductSearch>(`/products?store=${encodeURIComponent(product.store.slug)}&limit=5`)
-    .catch(() => ({ items: [], total: 0, page: 1, limit: 5 }));
+  const [related, reviews, storeReputation] = await Promise.all([
+    publicApi<ProductSearch>(`/products?store=${encodeURIComponent(product.store.slug)}&limit=5`)
+      .catch(() => ({ items: [], total: 0, page: 1, limit: 5 })),
+    publicApi<ProductReviews>(`/reviews/products/${product.id}?limit=8`)
+      .catch(() => ({ items: [], total: 0, page: 1, limit: 8, summary: { average: 0, count: 0, distribution: [] } })),
+    publicApi<ReviewSummary>(`/reviews/stores/${product.store.id}/summary`)
+      .catch(() => ({ average: 0, count: 0, distribution: [] })),
+  ]);
 
   const moreFromSeller = related.items.filter((item) => item.id !== product.id).slice(0, 4);
-  const image = product.images?.[0]?.url ?? 'https://placehold.co/1000x1000?text=Multiventas';
+  const image = product.images?.[0]?.url ?? 'https://placehold.co/1000x1000?text=SeVende';
   const accent = product.store.primaryColor || '#18181b';
 
   return (
@@ -56,9 +84,15 @@ export default async function ProductPage({ params }: { params: { id: string } }
               <div className="grid size-12 place-items-center overflow-hidden rounded-xl border bg-muted">
                 {product.store.logoUrl ? <img src={product.store.logoUrl} alt="" className="h-full w-full object-cover" /> : <StoreIcon className="size-5" />}
               </div>
-              <div className="min-w-0">
+              <div className="min-w-0 flex-1">
                 <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">Vendido por</p>
                 <p className="truncate font-black">{product.store.name}</p>
+                {storeReputation.count > 0 && (
+                  <div className="mt-1 flex items-center gap-2 text-xs text-muted-foreground">
+                    <ReviewStars rating={storeReputation.average} />
+                    <span>{storeReputation.average.toFixed(1)} · {storeReputation.count} opiniones</span>
+                  </div>
+                )}
               </div>
               <ArrowRight className="ml-auto size-4" />
             </Link>
@@ -66,6 +100,12 @@ export default async function ProductPage({ params }: { params: { id: string } }
             <div>
               {product.category && <Badge className="text-white" style={{ backgroundColor: accent }}>{product.category.name}</Badge>}
               <h1 className="mt-3 text-4xl font-black tracking-tight">{product.title}</h1>
+              {reviews.summary.count > 0 && (
+                <a href="#opiniones" className="mt-3 inline-flex items-center gap-2 text-sm hover:underline">
+                  <ReviewStars rating={reviews.summary.average} showValue />
+                  <span className="text-muted-foreground">{reviews.summary.count} opiniones verificadas</span>
+                </a>
+              )}
               {product.description && <p className="mt-4 whitespace-pre-line leading-7 text-muted-foreground">{product.description}</p>}
             </div>
 
@@ -84,6 +124,75 @@ export default async function ProductPage({ params }: { params: { id: string } }
             </Link>
           </div>
         </div>
+
+        <section id="opiniones" className="mt-14 border-t pt-10">
+          <div className="grid gap-8 lg:grid-cols-[300px_1fr]">
+            <div>
+              <p className="text-sm font-semibold uppercase tracking-widest text-muted-foreground">Reputación</p>
+              <h2 className="mt-1 text-3xl font-black">Opiniones verificadas</h2>
+
+              {reviews.summary.count > 0 ? (
+                <div className="mt-5 rounded-2xl border bg-slate-50 p-5">
+                  <div className="flex items-end gap-3">
+                    <span className="text-5xl font-black">{reviews.summary.average.toFixed(1)}</span>
+                    <span className="pb-1 text-sm text-muted-foreground">de 5</span>
+                  </div>
+                  <div className="mt-2"><ReviewStars rating={reviews.summary.average} size="md" /></div>
+                  <p className="mt-2 text-sm text-muted-foreground">{reviews.summary.count} opiniones publicadas</p>
+
+                  <div className="mt-5 space-y-2">
+                    {[5, 4, 3, 2, 1].map((rating) => {
+                      const count = reviews.summary.distribution.find((item) => item.rating === rating)?.count ?? 0;
+                      const percent = reviews.summary.count ? (count / reviews.summary.count) * 100 : 0;
+                      return (
+                        <div key={rating} className="grid grid-cols-[18px_1fr_28px] items-center gap-2 text-xs">
+                          <span>{rating}</span>
+                          <div className="h-1.5 overflow-hidden rounded-full bg-slate-200">
+                            <div className="h-full rounded-full bg-amber-400" style={{ width: percent + '%' }} />
+                          </div>
+                          <span className="text-right text-muted-foreground">{count}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              ) : (
+                <p className="mt-4 text-sm leading-6 text-muted-foreground">
+                  Este producto todavía no tiene opiniones publicadas. Las reseñas solo pueden ser creadas por compradores con pedidos entregados.
+                </p>
+              )}
+            </div>
+
+            <div className="space-y-3">
+              {reviews.items.map((review) => (
+                <article key={review.id} className="rounded-2xl border bg-white p-5">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div>
+                      <p className="font-bold">{review.buyerName}</p>
+                      {review.verifiedPurchase && (
+                        <span className="mt-1 inline-flex items-center gap-1 text-xs font-semibold text-emerald-700">
+                          <ShieldCheck className="size-3.5" /> Compra verificada
+                        </span>
+                      )}
+                    </div>
+                    <div className="text-right">
+                      <ReviewStars rating={review.rating} />
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        {new Date(review.createdAt).toLocaleDateString('es-UY')}
+                      </p>
+                    </div>
+                  </div>
+                  {review.comment && <p className="mt-4 whitespace-pre-line text-sm leading-6 text-slate-600">{review.comment}</p>}
+                </article>
+              ))}
+              {!reviews.items.length && (
+                <div className="rounded-2xl border border-dashed p-8 text-center text-sm text-muted-foreground">
+                  Sé de los primeros compradores en compartir tu experiencia cuando recibas este producto.
+                </div>
+              )}
+            </div>
+          </div>
+        </section>
 
         {!!moreFromSeller.length && (
           <section className="mt-14 border-t pt-10">
