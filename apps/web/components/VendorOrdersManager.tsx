@@ -87,8 +87,19 @@ function addressText(address?: Record<string, unknown> | null) {
 }
 
 function nextAction(order: VendorOrder): { status: OrderStatus; label: string; icon: any } | null {
-  if (order.status === 'PAID') return { status: 'SHIPPED', label: 'Marcar enviado', icon: Truck };
-  if (order.status === 'SHIPPED') return { status: 'DELIVERED', label: 'Marcar entregado', icon: PackageCheck };
+  const methods = order.items.map((item) => item.deliveryMethod).filter(Boolean);
+  const onlyPickup = methods.length > 0 && methods.every((method) => method === 'PICKUP');
+  const onlyDigital = methods.length > 0 && methods.every((method) => method === 'DIGITAL');
+
+  if (order.status === 'PAID') {
+    if (onlyPickup) return { status: 'SHIPPED', label: 'Marcar listo para retiro', icon: PackageCheck };
+    if (onlyDigital) return { status: 'SHIPPED', label: 'Marcar entrega enviada', icon: PackageCheck };
+    return { status: 'SHIPPED', label: 'Marcar enviado', icon: Truck };
+  }
+  if (order.status === 'SHIPPED') {
+    if (onlyPickup) return { status: 'DELIVERED', label: 'Marcar retirado', icon: PackageCheck };
+    return { status: 'DELIVERED', label: 'Marcar entregado', icon: PackageCheck };
+  }
   if (order.status === 'PENDING') return { status: 'CANCELLED', label: 'Cancelar pedido', icon: XCircle };
   return null;
 }
