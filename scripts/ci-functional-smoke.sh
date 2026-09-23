@@ -226,6 +226,64 @@ request DELETE "/cart/$vendor_product_id" "$buyer_access" >/tmp/cart-promo-delet
 
 request DELETE "/vendor/promotions/$promotion_id" "$vendor_access" >/tmp/vendor-promotion-delete.json || fail "vendor promotion delete"
 
+review_order_item_id=$(CI_VENDOR_ID="$vendor_id" CI_STORE_ID="$store_id" CI_PRODUCT_ID="$vendor_product_id" node - <<'NODE'
+const { PrismaClient } = require('@prisma/client');
+const prisma = new PrismaClient();
+(async () => {
+  const buyer = await prisma.user.findUnique({ where: { email: 'ci-buyer@multiventas.test' } });
+  if (!buyer) throw new Error('CI buyer missing');
+  const order = await prisma.order.create({
+    data: {
+      tenantId: process.env.CI_VENDOR_ID,
+      storeId: process.env.CI_STORE_ID,
+      buyerId: buyer.id,
+      status: 'DELIVERED',
+      subtotal: 1299,
+      total: 1299,
+      items: {
+        create: {
+          tenantId: process.env.CI_VENDOR_ID,
+          productId: process.env.CI_PRODUCT_ID,
+          title: 'CI Product Updated',
+          sku: 'CI-001',
+          quantity: 1,
+          unitPrice: 1299,
+          total: 1299,
+        },
+      },
+    },
+    select: { items: { select: { id: true } } },
+  });
+  process.stdout.write(order.items[0].id);
+})().finally(() => prisma.$disconnect());
+NODE
+)
+[ -n "$review_order_item_id" ] || fail "review order item seed missing"
+
+review_payload=$(jq -cn --arg orderItemId "$review_order_item_id" '{orderItemId:$orderItemId,rating:5,comment:"Excelente compra CI"}')
+review_created=$(request POST /reviews "$buyer_access" "$review_payload") || fail "verified review create"
+review_id=$(echo "$review_created" | jq -r '.id // empty')
+[ -n "$review_id" ] || fail "review id missing"
+echo "$review_created" | jq -e '.status == "PENDING" and .rating == 5' >/dev/null || fail "new review should start pending"
+
+duplicate_review_status=$(curl --silent --show-error -o /tmp/duplicate-review.json -w '%{http_code}'   -X POST "$BASE_URL/reviews"   -H "authorization: Bearer $buyer_access"   -H 'content-type: application/json'   --data "$review_payload") || fail "duplicate review request"
+[ "$duplicate_review_status" = "400" ] || fail "duplicate review was not rejected"
+
+buyer_orders=$(request GET /orders/mine "$buyer_access") || fail "buyer orders after review"
+echo "$buyer_orders" | jq -e --arg item "$review_order_item_id" 'any(.[]?.items[]?; .id == $item and .review.status == "PENDING")' >/dev/null || fail "buyer cannot read own pending review"
+
+pending_reviews=$(request GET '/admin/reviews?status=PENDING' "$admin_access") || fail "admin pending reviews"
+echo "$pending_reviews" | jq -e --arg id "$review_id" 'any(.items[]; .id == $id and .orderItemId != null)' >/dev/null || fail "pending review missing from moderation"
+
+request PATCH "/admin/reviews/$review_id" "$admin_access" '{"status":"PUBLISHED"}' >/tmp/review-published.json || fail "review moderation publish"
+jq -e '.status == "PUBLISHED"' /tmp/review-published.json >/dev/null || fail "review not published"
+
+public_reviews=$(request GET "/reviews/products/$vendor_product_id?limit=10") || fail "public product reviews"
+echo "$public_reviews" | jq -e --arg id "$review_id" '.summary.average == 5 and .summary.count >= 1 and any(.items[]; .id == $id and .verifiedPurchase == true and .rating == 5)' >/dev/null || fail "published verified review missing publicly"
+
+store_reputation=$(request GET "/reviews/stores/$store_id/summary") || fail "public store reputation"
+echo "$store_reputation" | jq -e '.average == 5 and .count >= 1' >/dev/null || fail "store reputation summary invalid"
+
 request DELETE "/vendor/products/$vendor_product_id/images/$vendor_image_id" "$vendor_access" >/tmp/vendor-product-image-delete.json || fail "vendor product image delete"
 
-echo "Functional smoke passed: database, auth, catalog, cart, vendor dashboard, promotions, tenant isolation and admin flows."
+echo "Functional smoke passed: database, auth, catalog, cart, vendor dashboard, promotions, verified reviews, tenant isolation and admin flows."
