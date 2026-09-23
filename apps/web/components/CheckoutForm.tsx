@@ -50,7 +50,13 @@ type CheckoutPreview = {
       title: string;
       quantity: number;
       deliveryOptions: DeliveryOption[];
-      selectedDelivery: DeliveryOption & { legacy?: boolean };
+      selectedDelivery: {
+        type: DeliveryType | null;
+        fee: number;
+        details?: string | null;
+        legacy?: boolean;
+        requiresSelection?: boolean;
+      };
     }>;
   }>;
   subtotal: number;
@@ -58,6 +64,7 @@ type CheckoutPreview = {
   discountAmount: number;
   total: number;
   requiresShippingAddress: boolean;
+  requiresDeliverySelection: boolean;
 };
 
 const deliveryLabel: Record<DeliveryType, string> = {
@@ -348,7 +355,13 @@ export function CheckoutForm() {
       </div>
 
       {error && <p className="rounded-md bg-red-50 p-3 text-sm text-red-700">{error}</p>}
-      <Button size="lg" disabled={loading || checkingPreview || !preview}>
+      {preview?.requiresDeliverySelection && (
+        <p className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm font-medium text-amber-800">
+          Elegí una forma de entrega para todos los productos antes de continuar.
+        </p>
+      )}
+
+      <Button size="lg" disabled={loading || checkingPreview || !preview || preview.requiresDeliverySelection}>
         {loading ? 'Preparando pago…' : 'Pagar con Mercado Pago'}
       </Button>
     </form>
