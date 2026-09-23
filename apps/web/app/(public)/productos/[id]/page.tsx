@@ -1,7 +1,7 @@
 import Image from 'next/image';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { ArrowLeft, ArrowRight, ShieldCheck, Store as StoreIcon } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Download, Gift, MapPin, ShieldCheck, Store as StoreIcon, Truck } from 'lucide-react';
 import { publicApi } from '@/lib/api';
 import { Product, ProductSearch } from '@/lib/types';
 import { money } from '@/lib/utils';
@@ -112,6 +112,45 @@ export default async function ProductPage({ params }: { params: { id: string } }
             <div className="rounded-2xl border p-5" style={{ borderColor: `${accent}44` }}>
               <p className="text-4xl font-black">{money(product.price, product.currency)}</p>
               <p className="mt-2 text-sm text-muted-foreground">Stock disponible: {product.stock}</p>
+
+              <div className="mt-5 space-y-2">
+                <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Formas de entrega</p>
+                {product.deliveryOptions?.length ? (
+                  <div className="grid gap-2">
+                    {product.deliveryOptions.map((option) => {
+                      const Icon = option.type === 'SHIPPING_PAID'
+                        ? Truck
+                        : option.type === 'SHIPPING_FREE'
+                          ? Gift
+                          : option.type === 'PICKUP'
+                            ? MapPin
+                            : Download;
+                      const label = option.type === 'SHIPPING_PAID'
+                        ? 'Envío pago'
+                        : option.type === 'SHIPPING_FREE'
+                          ? 'Envío gratis'
+                          : option.type === 'PICKUP'
+                            ? 'Retiro en local'
+                            : 'Entrega digital';
+                      return (
+                        <div key={option.type} className="flex items-start gap-3 rounded-xl bg-slate-50 p-3">
+                          <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-white shadow-sm"><Icon className="size-4" /></span>
+                          <div className="min-w-0">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <p className="font-bold">{label}</p>
+                              {option.type === 'SHIPPING_PAID' && <span className="text-sm font-black">{money(Number(option.fee), product.currency)}</span>}
+                            </div>
+                            {option.details && <p className="mt-0.5 text-xs leading-5 text-muted-foreground">{option.details}</p>}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <p className="rounded-xl bg-slate-50 p-3 text-sm text-muted-foreground">Entrega a coordinar directamente con el vendedor.</p>
+                )}
+              </div>
+
               <div className="mt-5"><ProductPurchasePanel productId={product.id} stock={product.stock} accentColor={accent} /></div>
             </div>
 
