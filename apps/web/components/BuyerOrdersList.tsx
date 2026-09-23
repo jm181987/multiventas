@@ -60,10 +60,18 @@ type BuyerOrder = {
 const label: Record<OrderStatus, string> = {
   PENDING: 'Pendiente de pago',
   PAID: 'Pagado',
-  SHIPPED: 'En camino',
+  SHIPPED: 'En proceso',
   DELIVERED: 'Entregado',
   CANCELLED: 'Cancelado',
 };
+
+function orderStatusLabel(order: BuyerOrder) {
+  if (order.status !== 'SHIPPED') return label[order.status];
+  const methods = order.items.map((item) => item.deliveryMethod).filter(Boolean);
+  if (methods.length && methods.every((method) => method === 'PICKUP')) return 'Listo para retiro';
+  if (methods.length && methods.every((method) => method === 'DIGITAL')) return 'Entrega enviada';
+  return 'En camino';
+}
 
 function statusIcon(status: OrderStatus) {
   if (status === 'PAID') return CheckCircle2;
@@ -141,7 +149,7 @@ export function BuyerOrdersList() {
             ['Todos', counters.all, 'ALL'],
             ['Pendientes', counters.pending, 'PENDING'],
             ['Pagados', counters.paid, 'PAID'],
-            ['En camino', counters.active, 'SHIPPED'],
+            ['En proceso', counters.active, 'SHIPPED'],
             ['Entregados', counters.delivered, 'DELIVERED'],
           ].map(([text, value, status]) => (
             <button
@@ -195,7 +203,7 @@ export function BuyerOrdersList() {
                         <div>
                           <div className="flex flex-wrap items-center gap-2">
                             <p className="font-black">#{order.id.slice(0, 8).toUpperCase()}</p>
-                            <Badge className={statusClass(order.status)}><Icon className="mr-1 size-3.5" />{label[order.status]}</Badge>
+                            <Badge className={statusClass(order.status)}><Icon className="mr-1 size-3.5" />{orderStatusLabel(order)}</Badge>
                           </div>
                           <Link href={`/tienda/${order.store.slug}`} className="mt-1 inline-block font-semibold hover:underline">{order.store.name}</Link>
                           <p className="text-xs text-muted-foreground">{new Date(order.createdAt).toLocaleString('es-UY')}</p>
