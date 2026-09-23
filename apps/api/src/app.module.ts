@@ -19,6 +19,7 @@ import { AdminModule } from './admin/admin.module';
 import { StorageModule } from './storage/storage.module';
 import { HealthModule } from './health/health.module';
 import { PromotionsModule } from './promotions/promotions.module';
+import { ReviewsModule } from './reviews/reviews.module';
 
 @Module({
   imports: [
@@ -38,6 +39,7 @@ import { PromotionsModule } from './promotions/promotions.module';
     WebhooksModule,
     CommissionsModule,
     PromotionsModule,
+    ReviewsModule,
     AdminModule,
     HealthModule,
   ],
