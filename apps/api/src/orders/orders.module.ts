@@ -445,7 +445,10 @@ class OrdersService {
   async updateVendorStatus(tenantId: string, id: string, status: OrderStatus) {
     const order = await this.db.client.order.findFirst({
       where: { id, tenantId },
-      include: { items: true },
+      include: {
+        items: true,
+        store: { select: { name: true } },
+      },
     });
     if (!order) throw new BadRequestException('Pedido inválido');
 
@@ -461,6 +464,51 @@ class OrdersService {
 
     if (status === OrderStatus.CANCELLED && order.status === OrderStatus.PENDING) {
       await this.restoreStock(order.items);
+    }
+
+    if (status === OrderStatus.SHIPPED) {
+      await this.notifications.create({
+        userId: order.buyerId,
+        tenantId,
+        type: NotificationType.ORDER_SHIPPED,
+        title: 'Tu pedido fue despachado',
+        message: `${order.store.name} actualizó tu pedido como enviado.`,
+        href: '/mis-pedidos',
+        metadata: { orderId: order.id },
+      });
+    }
+
+    if (status === OrderStatus.DELIVERED) {
+      await this.notifications.create({
+        userId: order.buyerId,
+        tenantId,
+        type: NotificationType.ORDER_DELIVERED,
+        title: 'Pedido entregado',
+        message: `Tu pedido de ${order.store.name} fue marcado como entregado.`,
+        href: '/mis-pedidos',
+        metadata: { orderId: order.id },
+      });
+      await this.notifications.create({
+        userId: order.buyerId,
+        tenantId,
+        type: NotificationType.REVIEW_REQUEST,
+        title: '¿Cómo fue tu compra?',
+        message: 'Contá tu experiencia y ayudá a otros compradores con una reseña verificada.',
+        href: '/mis-pedidos',
+        metadata: { orderId: order.id },
+      });
+    }
+
+    if (status === OrderStatus.CANCELLED) {
+      await this.notifications.create({
+        userId: order.buyerId,
+        tenantId,
+        type: NotificationType.ORDER_CANCELLED,
+        title: 'Pedido cancelado',
+        message: `El pedido de ${order.store.name} fue cancelado.`,
+        href: '/mis-pedidos',
+        metadata: { orderId: order.id },
+      });
     }
 
     const updated = await this.db.client.order.findUniqueOrThrow({
@@ -504,6 +552,14 @@ class OrdersService {
     }
 
     await this.restoreStock(order.items);
+
+    await this.notifications.createForVendor(order.tenantId, {
+      type: NotificationType.ORDER_CANCELLED,
+      title: 'Pedido cancelado',
+      message: 'El comprador canceló un pedido que todavía estaba pendiente de pago.',
+      href: '/vendor/pedidos',
+      metadata: { orderId: order.id },
+    });
 
     const updated = await this.db.client.order.findUniqueOrThrow({
       where: { id },
