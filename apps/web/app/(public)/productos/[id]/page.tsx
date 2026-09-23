@@ -9,6 +9,7 @@ import { ProductGrid } from '@/components/ProductGrid';
 import { Badge } from '@/components/ui/badge';
 import { ProductPurchasePanel } from '@/components/ProductPurchasePanel';
 import { ReviewStars } from '@/components/ReviewStars';
+import { FavoriteButton } from '@/components/FavoriteButton';
 
 export const dynamic = 'force-dynamic';
 
@@ -151,7 +152,10 @@ export default async function ProductPage({ params }: { params: { id: string } }
                 )}
               </div>
 
-              <div className="mt-5"><ProductPurchasePanel productId={product.id} stock={product.stock} accentColor={accent} /></div>
+              <div className="mt-5 flex flex-wrap gap-2">
+                <ProductPurchasePanel productId={product.id} stock={product.stock} accentColor={accent} />
+                <FavoriteButton productId={product.id} withLabel />
+              </div>
             </div>
 
             <Link
