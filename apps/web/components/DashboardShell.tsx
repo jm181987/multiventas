@@ -31,7 +31,7 @@ export function DashboardShell({ kind, children }: { kind: 'vendor' | 'admin'; c
   if (!user || !user.roles.includes(requiredRole)) return null;
 
   const links = kind === 'vendor'
-    ? [['/vendor','Resumen'],['/vendor/productos','Productos'],['/vendor/pedidos','Pedidos'],['/vendor/promociones','Promociones'],['/vendor/configuracion','Configuración'],['/vendor/mercadopago','Mercado Pago']]
+    ? [['/vendor','Resumen'],['/vendor/analitica','Analítica'],['/vendor/productos','Productos'],['/vendor/pedidos','Pedidos'],['/vendor/promociones','Promociones'],['/vendor/configuracion','Configuración'],['/vendor/mercadopago','Mercado Pago']]
     : [['/admin','Resumen'],['/admin/vendedores','Vendedores'],['/admin/usuarios','Usuarios'],['/admin/pedidos','Pedidos'],['/admin/resenas','Reseñas'],['/admin/transacciones','Transacciones'],['/admin/comisiones','Comisiones'],['/admin/configuracion','Configuración']];
 
   return (

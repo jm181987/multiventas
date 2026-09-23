@@ -13,6 +13,7 @@ const TENANT_MODELS = new Set([
   'Commission',
   'Review',
   'ProductDeliveryOption',
+  'ProductAnalyticsDaily',
   'AuditLog',
 ]);
 

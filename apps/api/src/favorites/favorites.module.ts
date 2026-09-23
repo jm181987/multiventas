@@ -4,10 +4,15 @@ import { DbService } from '../common/db.service';
 import { AuthUser, CurrentUser, SystemContext } from '../common/decorators';
 import { JwtAuthGuard } from '../common/guards';
 import { StorageService } from '../storage/storage.module';
+import { AnalyticsModule, AnalyticsService } from '../analytics/analytics.module';
 
 @Injectable()
 class FavoritesService {
-  constructor(private readonly db: DbService, private readonly storage: StorageService) {}
+  constructor(
+    private readonly db: DbService,
+    private readonly storage: StorageService,
+    private readonly analytics: AnalyticsService,
+  ) {}
 
   private normalizeProduct(product: any) {
     return {
@@ -75,11 +80,16 @@ class FavoritesService {
     });
     if (!product) throw new BadRequestException('Producto no disponible');
 
-    await this.db.client.favorite.upsert({
+    const existing = await this.db.client.favorite.findUnique({
       where: { userId_productId: { userId, productId } },
-      create: { userId, productId },
-      update: {},
+      select: { id: true },
     });
+
+    if (!existing) {
+      await this.db.client.favorite.create({ data: { userId, productId } });
+      await this.analytics.trackFavoriteAdd(productId).catch(() => undefined);
+    }
+
     return { favorite: true, productId };
   }
 
@@ -117,6 +127,7 @@ class FavoritesController {
 }
 
 @Module({
+  imports: [AnalyticsModule],
   controllers: [FavoritesController],
   providers: [FavoritesService],
 })

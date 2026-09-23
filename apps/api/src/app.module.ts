@@ -22,6 +22,7 @@ import { PromotionsModule } from './promotions/promotions.module';
 import { ReviewsModule } from './reviews/reviews.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { FavoritesModule } from './favorites/favorites.module';
+import { AnalyticsModule } from './analytics/analytics.module';
 
 @Module({
   imports: [
@@ -44,6 +45,7 @@ import { FavoritesModule } from './favorites/favorites.module';
     ReviewsModule,
     NotificationsModule,
     FavoritesModule,
+    AnalyticsModule,
     AdminModule,
     HealthModule,
   ],

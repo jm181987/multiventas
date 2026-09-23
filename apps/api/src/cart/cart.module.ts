@@ -7,6 +7,7 @@ import { AuthUser, CurrentUser } from '../common/decorators';
 import { JwtAuthGuard } from '../common/guards';
 import { NotificationType, ProductStatus } from '@multiventas/db';
 import { NotificationsModule, NotificationsService } from '../notifications/notifications.module';
+import { AnalyticsModule, AnalyticsService } from '../analytics/analytics.module';
 
 export type CartItem = { productId: string; quantity: number };
 
@@ -28,6 +29,7 @@ export class CartService implements OnModuleDestroy {
   constructor(
     private readonly db: DbService,
     private readonly notifications: NotificationsService,
+    private readonly analytics: AnalyticsService,
   ) {}
 
   private key(userId: string) { return `cart:${userId}`; }
@@ -63,6 +65,7 @@ export class CartService implements OnModuleDestroy {
     else cart.push(item);
     await this.redis.set(this.key(userId), JSON.stringify(cart), 'EX', 60 * 60 * 24 * 30);
     await this.touch(userId, cart.length > 0);
+    await this.analytics.trackCartAdd(item.productId).catch(() => undefined);
     return cart;
   }
 
@@ -173,5 +176,5 @@ class CartController {
   }
 }
 
-@Module({ imports: [NotificationsModule], controllers: [CartController], providers: [CartService], exports: [CartService] })
+@Module({ imports: [NotificationsModule, AnalyticsModule], controllers: [CartController], providers: [CartService], exports: [CartService] })
 export class CartModule {}

@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
 import {
-  ArrowRight, BadgeDollarSign, Boxes, Check, CircleDollarSign, Clock3,
+  ArrowRight, BadgeDollarSign, BarChart3, Boxes, Check, CircleDollarSign, Clock3,
   PackageCheck, ShoppingBag, Sparkles, TrendingUp, TriangleAlert, WalletCards
 } from 'lucide-react';
 import { authApi } from '@/lib/api';
@@ -67,6 +67,7 @@ export function VendorDashboard() {
           <p className="mt-1 text-muted-foreground">Ventas, pedidos y próximos pasos en un solo lugar.</p>
         </div>
         <div className="flex flex-wrap gap-2">
+          <Link href="/vendor/analitica"><Button variant="outline"><BarChart3 className="mr-2 size-4" /> Analítica</Button></Link>
           <Link href="/vendor/productos"><Button variant="outline"><Boxes className="mr-2 size-4" /> Productos</Button></Link>
           <Link href="/vendor/promociones">
             <Button className="bg-gradient-to-r from-[#6366F1] to-[#8B5CF6] text-white hover:brightness-110">
