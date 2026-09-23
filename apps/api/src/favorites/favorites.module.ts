@@ -1,7 +1,7 @@
 import { BadRequestException, Controller, Delete, Get, Injectable, Module, Param, Post, UseGuards } from '@nestjs/common';
 import { ProductStatus, StoreStatus } from '@multiventas/db';
 import { DbService } from '../common/db.service';
-import { AuthUser, CurrentUser } from '../common/decorators';
+import { AuthUser, CurrentUser, SystemContext } from '../common/decorators';
 import { JwtAuthGuard } from '../common/guards';
 import { StorageService } from '../storage/storage.module';
 
@@ -90,6 +90,7 @@ class FavoritesService {
 }
 
 @UseGuards(JwtAuthGuard)
+@SystemContext()
 @Controller('favorites')
 class FavoritesController {
   constructor(private readonly favorites: FavoritesService) {}
