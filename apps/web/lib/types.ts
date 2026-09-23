@@ -1,3 +1,13 @@
+export type DeliveryMethodType = 'SHIPPING_PAID' | 'SHIPPING_FREE' | 'PICKUP' | 'DIGITAL';
+
+export type ProductDeliveryOption = {
+  id?: string;
+  type: DeliveryMethodType;
+  fee: string | number;
+  details?: string | null;
+  isActive?: boolean;
+};
+
 export type Store = {
   id: string;
   slug: string;
@@ -24,6 +34,7 @@ export type Product = {
   stock: number;
   status?: 'DRAFT' | 'ACTIVE' | 'ARCHIVED';
   images: ProductImage[];
+  deliveryOptions?: ProductDeliveryOption[];
   store: Store;
   category?: { id: string; slug: string; name: string };
   createdAt?: string;
