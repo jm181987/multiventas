@@ -1,10 +1,12 @@
 import { BadRequestException, Body, Controller, Delete, Get, Injectable, Module, OnModuleDestroy, Param, Patch, Post, UseGuards } from '@nestjs/common';
+import { Cron, CronExpression } from '@nestjs/schedule';
 import { IsInt, IsString, Min } from 'class-validator';
 import Redis from 'ioredis';
 import { DbService } from '../common/db.service';
 import { AuthUser, CurrentUser } from '../common/decorators';
 import { JwtAuthGuard } from '../common/guards';
-import { ProductStatus } from '@multiventas/db';
+import { NotificationType, ProductStatus } from '@multiventas/db';
+import { NotificationsModule, NotificationsService } from '../notifications/notifications.module';
 
 export type CartItem = { productId: string; quantity: number };
 
@@ -23,9 +25,26 @@ export class CartService implements OnModuleDestroy {
     maxRetriesPerRequest: 2,
   });
 
-  constructor(private readonly db: DbService) {}
+  constructor(
+    private readonly db: DbService,
+    private readonly notifications: NotificationsService,
+  ) {}
 
   private key(userId: string) { return `cart:${userId}`; }
+  private metaKey(userId: string) { return `cart-meta:${userId}`; }
+
+  private async touch(userId: string, hasItems = true) {
+    if (!hasItems) {
+      await this.redis.del(this.metaKey(userId));
+      return;
+    }
+    await this.redis.set(
+      this.metaKey(userId),
+      JSON.stringify({ updatedAt: Date.now(), remindedAt: null }),
+      'EX',
+      60 * 60 * 24 * 30,
+    );
+  }
 
   async get(userId: string): Promise<CartItem[]> {
     const raw = await this.redis.get(this.key(userId));
@@ -43,6 +62,7 @@ export class CartService implements OnModuleDestroy {
     if (existing) existing.quantity = Math.min(product.stock, existing.quantity + item.quantity);
     else cart.push(item);
     await this.redis.set(this.key(userId), JSON.stringify(cart), 'EX', 60 * 60 * 24 * 30);
+    await this.touch(userId, cart.length > 0);
     return cart;
   }
 
@@ -58,16 +78,84 @@ export class CartService implements OnModuleDestroy {
     if (!item) throw new BadRequestException('Producto no está en el carrito');
     item.quantity = quantity;
     await this.redis.set(this.key(userId), JSON.stringify(cart), 'EX', 60 * 60 * 24 * 30);
+    await this.touch(userId, cart.length > 0);
     return cart;
   }
 
   async remove(userId: string, productId: string) {
     const cart = (await this.get(userId)).filter((x) => x.productId !== productId);
     await this.redis.set(this.key(userId), JSON.stringify(cart), 'EX', 60 * 60 * 24 * 30);
+    await this.touch(userId, cart.length > 0);
     return cart;
   }
 
-  clear(userId: string) { return this.redis.del(this.key(userId)); }
+  async clear(userId: string) {
+    return this.redis.del(this.key(userId), this.metaKey(userId));
+  }
+
+  @Cron(CronExpression.EVERY_HOUR)
+  async remindAbandonedCarts() {
+    const thresholdHours = Math.max(1, Number(process.env.CART_ABANDONED_HOURS ?? '3'));
+    const thresholdMs = thresholdHours * 60 * 60 * 1000;
+    let cursor = '0';
+
+    do {
+      const [nextCursor, keys] = await this.redis.scan(cursor, 'MATCH', 'cart:*', 'COUNT', 100);
+      cursor = nextCursor;
+
+      for (const key of keys) {
+        const userId = key.slice('cart:'.length);
+        if (!userId) continue;
+
+        const [rawCart, rawMeta] = await Promise.all([
+          this.redis.get(key),
+          this.redis.get(this.metaKey(userId)),
+        ]);
+
+        const cart = rawCart ? JSON.parse(rawCart) as CartItem[] : [];
+        if (!cart.length) {
+          await this.redis.del(this.metaKey(userId));
+          continue;
+        }
+
+        if (!rawMeta) {
+          await this.touch(userId, true);
+          continue;
+        }
+
+        const meta = JSON.parse(rawMeta) as { updatedAt?: number; remindedAt?: number | null };
+        const updatedAt = Number(meta.updatedAt ?? Date.now());
+        if (Date.now() - updatedAt < thresholdMs) continue;
+        if (meta.remindedAt && meta.remindedAt >= updatedAt) continue;
+
+        const lockKey = `cart-reminder-lock:${userId}:${updatedAt}`;
+        const locked = await this.redis.set(lockKey, '1', 'EX', 60 * 60 * 24 * 30, 'NX');
+        if (!locked) continue;
+
+        try {
+          await this.notifications.create({
+            userId,
+            type: NotificationType.CART_ABANDONED,
+            title: 'Tu carrito te está esperando',
+            message: cart.length === 1
+              ? 'Guardaste un producto en tu carrito. Podés retomar la compra cuando quieras.'
+              : `Tenés ${cart.length} productos en tu carrito. Retomá tu compra cuando quieras.`,
+            href: '/checkout',
+            metadata: { itemCount: cart.length, updatedAt },
+          });
+          await this.redis.set(
+            this.metaKey(userId),
+            JSON.stringify({ updatedAt, remindedAt: Date.now() }),
+            'EX',
+            60 * 60 * 24 * 30,
+          );
+        } catch {
+          await this.redis.del(lockKey);
+        }
+      }
+    } while (cursor !== '0');
+  }
+
   onModuleDestroy() { return this.redis.quit(); }
 }
 
@@ -85,5 +173,5 @@ class CartController {
   }
 }
 
-@Module({ controllers: [CartController], providers: [CartService], exports: [CartService] })
+@Module({ imports: [NotificationsModule], controllers: [CartController], providers: [CartService], exports: [CartService] })
 export class CartModule {}

@@ -546,6 +546,60 @@ class OrdersService {
     return this.normalizeOrder(updated);
   }
 
+  async reorder(userId: string, id: string) {
+    const order = await this.db.client.order.findFirst({
+      where: { id, buyerId: userId },
+      include: { items: true },
+    });
+    if (!order) throw new BadRequestException('Pedido inválido');
+
+    const productIds = order.items
+      .map((item) => item.productId)
+      .filter((productId): productId is string => Boolean(productId));
+
+    const products = productIds.length
+      ? await this.db.client.product.findMany({
+          where: {
+            id: { in: productIds },
+            status: ProductStatus.ACTIVE,
+            deletedAt: null,
+            store: { status: 'ACTIVE', deletedAt: null },
+          },
+          select: { id: true, title: true, stock: true },
+        })
+      : [];
+
+    const added: Array<{ productId: string; title: string; quantity: number }> = [];
+    const skipped: Array<{ title: string; reason: string }> = [];
+
+    for (const item of order.items) {
+      if (!item.productId) {
+        skipped.push({ title: item.title, reason: 'Producto ya no disponible' });
+        continue;
+      }
+
+      const product = products.find((candidate) => candidate.id === item.productId);
+      if (!product || product.stock <= 0) {
+        skipped.push({ title: item.title, reason: 'Sin stock o fuera de publicación' });
+        continue;
+      }
+
+      const quantity = Math.min(item.quantity, product.stock);
+      await this.cart.add(userId, { productId: product.id, quantity });
+      added.push({ productId: product.id, title: product.title, quantity });
+    }
+
+    if (!added.length) {
+      throw new BadRequestException('Ninguno de los productos de este pedido está disponible para recomprar');
+    }
+
+    return {
+      added,
+      skipped,
+      cart: await this.cart.get(userId),
+    };
+  }
+
   async cancelBuyerOrder(userId: string, id: string) {
     const order = await this.db.client.order.findFirst({
       where: { id, buyerId: userId },
@@ -616,6 +670,11 @@ class BuyerOrdersController {
   @Get('mine')
   mine(@CurrentUser() user: AuthUser) {
     return this.orders.buyerOrders(user.sub);
+  }
+
+  @Post(':id/reorder')
+  reorder(@CurrentUser() user: AuthUser, @Param('id') id: string) {
+    return this.orders.reorder(user.sub, id);
   }
 
   @Patch(':id/cancel')

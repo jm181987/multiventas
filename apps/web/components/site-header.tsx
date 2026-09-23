@@ -18,7 +18,7 @@ export function SiteHeader() {
   const premiumHome = pathname === '/';
 
   const links: Array<[string, string]> = [['/productos', 'Productos'], ['/tiendas', 'Tiendas']];
-  if (user) links.push(['/mis-pedidos', 'Mis pedidos']);
+  if (user) links.push(['/favoritos', 'Favoritos'], ['/mis-pedidos', 'Mis pedidos']);
   if (user?.roles.includes('VENDOR')) links.push(['/vendor', 'Mi tienda']);
   else if (!user) links.push(['/registro?tipo=vendedor', 'Vender']);
   if (user?.roles.includes('ADMIN')) links.push(['/admin', 'Administración']);

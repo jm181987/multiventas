@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { CheckCircle2, ChevronDown, Clock3, PackageCheck, Store, Truck, XCircle } from 'lucide-react';
+import { CheckCircle2, ChevronDown, Clock3, PackageCheck, Repeat2, Store, Truck, XCircle } from 'lucide-react';
 import { authApi } from '@/lib/api';
 import { money } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
@@ -11,6 +11,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { OrderStatusTimeline } from '@/components/OrderStatusTimeline';
 import { ProductReviewAction } from '@/components/ProductReviewAction';
+import { useCartUi } from '@/store/cart';
 
 type OrderStatus = 'PENDING' | 'PAID' | 'SHIPPED' | 'DELIVERED' | 'CANCELLED';
 
@@ -113,15 +114,38 @@ function addressText(address?: Record<string, unknown> | null) {
 
 export function BuyerOrdersList() {
   const qc = useQueryClient();
+  const setCartOpen = useCartUi((state) => state.setOpen);
   const [filter, setFilter] = useState<'ALL' | OrderStatus>('ALL');
   const [expanded, setExpanded] = useState<string | null>(null);
   const [actionError, setActionError] = useState('');
+  const [actionNotice, setActionNotice] = useState('');
 
   const query = useQuery({ queryKey: ['buyer-orders'], queryFn: () => authApi<BuyerOrder[]>('/orders/mine') });
   const cancel = useMutation({
     mutationFn: (id: string) => authApi(`/orders/${id}/cancel`, { method: 'PATCH' }),
     onSuccess: () => { setActionError(''); qc.invalidateQueries({ queryKey: ['buyer-orders'] }); },
     onError: (e) => setActionError(e instanceof Error ? e.message : 'No se pudo cancelar el pedido'),
+  });
+
+  const reorder = useMutation({
+    mutationFn: (id: string) => authApi<{
+      added: Array<{ productId: string; title: string; quantity: number }>;
+      skipped: Array<{ title: string; reason: string }>;
+    }>(`/orders/${id}/reorder`, { method: 'POST' }),
+    onSuccess: (result) => {
+      setActionError('');
+      setActionNotice(
+        result.skipped.length
+          ? `Agregamos ${result.added.length} producto(s) al carrito. ${result.skipped.length} ya no estaban disponibles.`
+          : 'Los productos disponibles fueron agregados al carrito.',
+      );
+      qc.invalidateQueries({ queryKey: ['cart'] });
+      setCartOpen(true);
+    },
+    onError: (e) => {
+      setActionNotice('');
+      setActionError(e instanceof Error ? e.message : 'No se pudo repetir la compra');
+    },
   });
 
   const orders = query.data ?? [];
@@ -165,6 +189,7 @@ export function BuyerOrdersList() {
         </div>
       )}
 
+      {actionNotice && <div className="rounded-lg bg-emerald-50 p-3 text-sm text-emerald-800">{actionNotice}</div>}
       {actionError && <div className="rounded-lg bg-red-50 p-3 text-sm text-red-700">{actionError}</div>}
 
       {query.isLoading ? (
@@ -221,6 +246,16 @@ export function BuyerOrdersList() {
                       </p>
                       <div className="flex flex-wrap gap-2">
                         <Link href={`/tienda/${order.store.slug}`}><Button variant="outline" size="sm">Ver tienda</Button></Link>
+                        {order.status !== 'PENDING' && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            disabled={reorder.isPending}
+                            onClick={() => reorder.mutate(order.id)}
+                          >
+                            <Repeat2 className="mr-1 size-4" /> Comprar de nuevo
+                          </Button>
+                        )}
                         <Button variant="outline" size="sm" onClick={() => setExpanded(isOpen ? null : order.id)}>
                           {isOpen ? 'Ocultar detalle' : 'Ver detalle'} <ChevronDown className={`ml-1 size-4 transition ${isOpen ? 'rotate-180' : ''}`} />
                         </Button>

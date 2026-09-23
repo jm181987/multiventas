@@ -29,6 +29,7 @@ function NotificationIcon({ type }: { type: string }) {
   if (type === 'ORDER_DELIVERED' || type === 'REVIEW_REQUEST') return <PackageCheck className="size-4 text-emerald-600" />;
   if (type === 'REVIEW_RECEIVED' || type === 'REVIEW_PUBLISHED') return <MessageSquareText className="size-4 text-violet-600" />;
   if (type === 'STOCK_LOW' || type === 'PAYMENT_FAILED' || type === 'ORDER_CANCELLED') return <TriangleAlert className="size-4 text-amber-600" />;
+  if (type === 'CART_ABANDONED') return <ShoppingBag className="size-4 text-rose-500" />;
   return <ShoppingBag className="size-4 text-indigo-600" />;
 }
 
