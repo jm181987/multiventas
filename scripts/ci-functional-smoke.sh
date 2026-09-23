@@ -199,6 +199,19 @@ echo "$public_vendor_products" | jq -e --arg id "$vendor_product_id" 'any(.items
 public_store=$(request GET /stores/ci-store) || fail "public branded store after publish"
 echo "$public_store" | jq -e '.primaryColor == "#112233" and .productCount >= 1' >/dev/null || fail "branded storefront metadata invalid"
 
+request POST "/favorites/$vendor_product_id" "$buyer_access" >/tmp/favorite-add.json || fail "favorite add"
+jq -e --arg id "$vendor_product_id" '.favorite == true and .productId == $id' /tmp/favorite-add.json >/dev/null || fail "favorite add response invalid"
+
+favorite_ids=$(request GET /favorites/ids "$buyer_access") || fail "favorite ids"
+echo "$favorite_ids" | jq -e --arg id "$vendor_product_id" 'index($id) != null' >/dev/null || fail "favorite id missing"
+
+favorites=$(request GET /favorites "$buyer_access") || fail "favorites list"
+echo "$favorites" | jq -e --arg id "$vendor_product_id" 'any(.[]; .product.id == $id and .product.title == "CI Product Updated")' >/dev/null || fail "favorite product missing"
+
+request DELETE "/favorites/$vendor_product_id" "$buyer_access" >/tmp/favorite-delete.json || fail "favorite delete"
+favorite_ids=$(request GET /favorites/ids "$buyer_access") || fail "favorite ids after delete"
+echo "$favorite_ids" | jq -e --arg id "$vendor_product_id" 'index($id) == null' >/dev/null || fail "favorite was not removed"
+
 public_stores=$(request GET '/stores?limit=20') || fail "public stores directory"
 echo "$public_stores" | jq -e 'any(.items[]; .slug == "ci-store" and .name == "CI Store Branded" and .productCount >= 1)' >/dev/null || fail "published vendor store missing from store directory"
 
@@ -240,6 +253,12 @@ psql "$DIRECT_URL" -v ON_ERROR_STOP=1 -c "INSERT INTO order_items (tenant_id, or
 
 request PATCH "/vendor/orders/$notify_order_id/status" "$vendor_access" '{"status":"SHIPPED"}' >/tmp/notify-order-shipped.json || fail "order shipped notification transition"
 request PATCH "/vendor/orders/$notify_order_id/status" "$vendor_access" '{"status":"DELIVERED"}' >/tmp/notify-order-delivered.json || fail "order delivered notification transition"
+
+reorder_result=$(request POST "/orders/$notify_order_id/reorder" "$buyer_access") || fail "reorder delivered order"
+echo "$reorder_result" | jq -e --arg id "$vendor_product_id" 'any(.added[]; .productId == $id and .quantity == 1)' >/dev/null || fail "reorder did not add available product"
+buyer_cart=$(request GET /cart "$buyer_access") || fail "cart after reorder"
+echo "$buyer_cart" | jq -e --arg id "$vendor_product_id" 'any(.[]; .productId == $id and .quantity == 1)' >/dev/null || fail "reorder cart state invalid"
+request DELETE "/cart/$vendor_product_id" "$buyer_access" >/tmp/reorder-cart-cleanup.json || fail "reorder cart cleanup"
 
 buyer_notifications=$(request GET /notifications "$buyer_access") || fail "buyer notifications"
 echo "$buyer_notifications" | jq -e '(.unread >= 3) and any(.items[]; .type == "ORDER_SHIPPED") and any(.items[]; .type == "ORDER_DELIVERED") and any(.items[]; .type == "REVIEW_REQUEST")' >/dev/null || fail "buyer order notifications missing"
@@ -289,4 +308,4 @@ echo "$store_reputation" | jq -e '.average == 5 and .count >= 1' >/dev/null || f
 
 request DELETE "/vendor/products/$vendor_product_id/images/$vendor_image_id" "$vendor_access" >/tmp/vendor-product-image-delete.json || fail "vendor product image delete"
 
-echo "Functional smoke passed: database, auth, catalog, delivery methods, notifications, vendor dashboard, promotions, verified reviews, tenant isolation and admin flows."
+echo "Functional smoke passed: database, auth, catalog, favorites, reorder, cart retention, delivery methods, notifications, vendor dashboard, promotions, verified reviews, tenant isolation and admin flows."
