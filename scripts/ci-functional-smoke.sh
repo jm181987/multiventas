@@ -226,38 +226,13 @@ request DELETE "/cart/$vendor_product_id" "$buyer_access" >/tmp/cart-promo-delet
 
 request DELETE "/vendor/promotions/$promotion_id" "$vendor_access" >/tmp/vendor-promotion-delete.json || fail "vendor promotion delete"
 
-review_order_item_id=$(CI_VENDOR_ID="$vendor_id" CI_STORE_ID="$store_id" CI_PRODUCT_ID="$vendor_product_id" node - <<'NODE'
-const { PrismaClient } = require('@prisma/client');
-const prisma = new PrismaClient();
-(async () => {
-  const buyer = await prisma.user.findUnique({ where: { email: 'ci-buyer@multiventas.test' } });
-  if (!buyer) throw new Error('CI buyer missing');
-  const order = await prisma.order.create({
-    data: {
-      tenantId: process.env.CI_VENDOR_ID,
-      storeId: process.env.CI_STORE_ID,
-      buyerId: buyer.id,
-      status: 'DELIVERED',
-      subtotal: 1299,
-      total: 1299,
-      items: {
-        create: {
-          tenantId: process.env.CI_VENDOR_ID,
-          productId: process.env.CI_PRODUCT_ID,
-          title: 'CI Product Updated',
-          sku: 'CI-001',
-          quantity: 1,
-          unitPrice: 1299,
-          total: 1299,
-        },
-      },
-    },
-    select: { items: { select: { id: true } } },
-  });
-  process.stdout.write(order.items[0].id);
-})().finally(() => prisma.$disconnect());
-NODE
-)
+buyer_user_id=$(psql "$DIRECT_URL" -v ON_ERROR_STOP=1 -Atc "SELECT id FROM users WHERE email = 'ci-buyer@multiventas.test' LIMIT 1;")
+[ -n "$buyer_user_id" ] || fail "review buyer seed missing"
+
+review_order_id=$(psql "$DIRECT_URL" -v ON_ERROR_STOP=1 -Atc "INSERT INTO orders (tenant_id, store_id, buyer_id, status, currency, subtotal, shipping_amount, discount_amount, total, created_at, updated_at) VALUES ('$vendor_id', '$store_id', '$buyer_user_id', 'DELIVERED', 'UYU', 1299, 0, 0, 1299, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP) RETURNING id;" | head -n1)
+[ -n "$review_order_id" ] || fail "review order seed missing"
+
+review_order_item_id=$(psql "$DIRECT_URL" -v ON_ERROR_STOP=1 -Atc "INSERT INTO order_items (tenant_id, order_id, product_id, title, sku, quantity, unit_price, total, created_at) VALUES ('$vendor_id', '$review_order_id', '$vendor_product_id', 'CI Product Updated', 'CI-001', 1, 1299, 1299, CURRENT_TIMESTAMP) RETURNING id;" | head -n1)
 [ -n "$review_order_item_id" ] || fail "review order item seed missing"
 
 review_payload=$(jq -cn --arg orderItemId "$review_order_item_id" '{orderItemId:$orderItemId,rating:5,comment:"Excelente compra CI"}')
