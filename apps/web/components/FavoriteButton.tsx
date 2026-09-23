@@ -34,7 +34,7 @@ export function FavoriteButton({
       const previous = qc.getQueryData<string[]>(['favorite-ids']) ?? [];
       qc.setQueryData<string[]>(
         ['favorite-ids'],
-        active ? previous.filter((id) => id !== productId) : [...new Set([...previous, productId])],
+        active ? previous.filter((id) => id !== productId) : Array.from(new Set(previous.concat(productId))),
       );
       return { previous };
     },
