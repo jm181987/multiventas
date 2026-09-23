@@ -10,6 +10,7 @@ import { contrastText, money } from '@/lib/utils';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { useCartUi } from '@/store/cart';
+import { FavoriteButton } from '@/components/FavoriteButton';
 
 export function ProductCard({ product, accentColor }: { product: Product; accentColor?: string }) {
   const qc = useQueryClient();
@@ -27,7 +28,9 @@ export function ProductCard({ product, accentColor }: { product: Product; accent
   });
 
   return (
-    <Card className="group overflow-hidden">
+    <Card className="group relative overflow-hidden">
+      <FavoriteButton productId={product.id} className="absolute right-3 top-3 z-10 border-white/70 bg-white/90 shadow-sm hover:bg-white" />
+
       <Link href={`/productos/${product.id}`} className="block">
         <div className="relative aspect-square overflow-hidden bg-muted">
           <Image src={image} alt={product.title} fill unoptimized={image.startsWith('/media/')} className="object-cover transition duration-300 group-hover:scale-105" />
