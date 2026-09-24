@@ -100,6 +100,34 @@ class RecommendationsService {
     });
   }
 
+  async trending() {
+    return this.db.runSystem(async () => {
+      const products = await this.db.client.product.findMany({
+        where: this.publicWhere,
+        include: {
+          ...this.include,
+          analytics: {
+            where: { date: { gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) } },
+            select: { views: true, cartAdds: true, favoriteAdds: true },
+          },
+        },
+        orderBy: { createdAt: 'desc' },
+        take: 80,
+      });
+      return products
+        .map((product) => ({
+          product,
+          score: product.analytics.reduce((sum, row) => sum + row.views + row.cartAdds * 4 + row.favoriteAdds * 3, 0),
+        }))
+        .sort((a, b) => b.score - a.score)
+        .slice(0, 8)
+        .map(({ product }) => {
+          const { analytics: _analytics, ...clean } = product;
+          return this.normalizeProduct(clean);
+        });
+    });
+  }
+
   async recent(ids: string[]) {
     const uniqueIds = Array.from(new Set(ids.filter(Boolean))).slice(0, 24);
     if (!uniqueIds.length) return [];
@@ -241,6 +269,9 @@ class RecommendationsService {
 @Controller('recommendations')
 class PublicRecommendationsController {
   constructor(private readonly recommendations: RecommendationsService) {}
+
+  @Get('trending')
+  trending() { return this.recommendations.trending(); }
 
   @Get('products/:productId/similar')
   similar(@Param('productId') productId: string) {
