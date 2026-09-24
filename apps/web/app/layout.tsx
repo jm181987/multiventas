@@ -3,6 +3,7 @@ import './globals.css';
 import { Providers } from '@/components/providers';
 import { SiteHeader } from '@/components/site-header';
 import { SiteFooter } from '@/components/SiteFooter';
+import { PwaExperience } from '@/components/PwaExperience';
 
 const siteUrl = 'https://www.sevende.knjpro.site';
 const description =
@@ -18,9 +19,17 @@ export const metadata: Metadata = {
   description,
   keywords: ['SeVende', 'KNJ', 'marketplace', 'comprar online', 'vender online', 'Uruguay', 'Mercado Pago'],
   alternates: { canonical: '/' },
+  manifest: '/manifest.webmanifest',
+  themeColor: '#111827',
+  appleWebApp: {
+    capable: true,
+    title: 'SeVende',
+    statusBarStyle: 'black-translucent',
+  },
   icons: {
     icon: [{ url: '/favicon.ico', type: 'image/x-icon' }],
     shortcut: '/favicon.ico',
+    apple: '/knj-logo.webp',
   },
   openGraph: {
     type: 'website',
@@ -52,6 +61,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
             <div className="flex-1">{children}</div>
             <SiteFooter />
           </div>
+          <PwaExperience />
         </Providers>
       </body>
     </html>
