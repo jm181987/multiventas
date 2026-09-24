@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { ShieldCheck } from 'lucide-react';
+import { InstallAppButton } from '@/components/InstallAppButton';
 
 const legalLinks = [
   ['/legal/terminos', 'Términos de uso'],
@@ -36,6 +37,7 @@ export function SiteFooter() {
             {legalLinks.map(([href, label]) => (
               <Link key={href} href={href} className="hover:text-white">{label}</Link>
             ))}
+            <InstallAppButton className="inline-flex w-fit items-center gap-2 font-semibold text-zinc-300 hover:text-white" />
           </nav>
         </div>
 

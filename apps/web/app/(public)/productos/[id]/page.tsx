@@ -187,7 +187,7 @@ export default async function ProductPage({ params }: { params: { id: string } }
 
             <div>
               {product.category && <Badge className="text-white" style={{ backgroundColor: accent }}>{product.category.name}</Badge>}
-              <h1 className="mt-3 text-4xl font-black tracking-tight">{product.title}</h1>
+              <h1 className="mt-3 break-words text-3xl font-black tracking-tight sm:text-4xl">{product.title}</h1>
               {reviews.summary.count > 0 && (
                 <a href="#opiniones" className="mt-3 inline-flex items-center gap-2 text-sm hover:underline">
                   <ReviewStars rating={reviews.summary.average} showValue />
@@ -239,7 +239,7 @@ export default async function ProductPage({ params }: { params: { id: string } }
                 )}
               </div>
 
-              <div className="mt-5 flex flex-wrap gap-2">
+              <div className="mt-5 flex min-w-0 flex-wrap gap-2">
                 <ProductPurchasePanel productId={product.id} stock={product.stock} accentColor={accent} />
                 <FavoriteButton productId={product.id} withLabel />
                 <ShareButton
