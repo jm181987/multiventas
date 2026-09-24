@@ -14,7 +14,7 @@ export default function OfflinePage() {
           SeVende no pudo conectarse en este momento. Tus datos sensibles nunca se sirven desde la caché offline.
         </p>
         <div className="mt-6 flex justify-center gap-3">
-          <Button asChild><Link href="/">Reintentar</Link></Button>
+          <Link href="/"><Button>Reintentar</Button></Link>
         </div>
       </div>
     </main>
