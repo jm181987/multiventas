@@ -10,6 +10,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
+import { ShareButton } from '@/components/ShareButton';
 
 type ProductStatus = 'DRAFT' | 'ACTIVE' | 'ARCHIVED';
 type VendorProduct = Product & { storeId: string; status: ProductStatus; store: Store };
@@ -426,6 +427,15 @@ export function ProductManager() {
                     <p className="mt-1 font-black">{money(Number(product.price), product.currency)}</p>
                   </div>
                   <div className="flex flex-wrap gap-2 sm:justify-end">
+                    {product.status === 'ACTIVE' && (
+                      <ShareButton
+                        path={`/productos/${product.id}`}
+                        title={product.title}
+                        text={`${product.title} en ${product.store?.name || 'SeVende'} · ${money(Number(product.price), product.currency)}`}
+                        productId={product.id}
+                        compact
+                      />
+                    )}
                     <Button variant="outline" size="sm" onClick={() => setEditingId(product.id)}><Pencil className="mr-1 size-4" /> Editar</Button>
                     {product.status === 'ACTIVE' ? <Button variant="ghost" size="sm" onClick={() => quickStatus.mutate({ id: product.id, status: 'DRAFT' })}><Archive className="mr-1 size-4" /> Pausar</Button> : <Button size="sm" onClick={() => quickStatus.mutate({ id: product.id, status: 'ACTIVE' })}>Publicar</Button>}
                   </div>
