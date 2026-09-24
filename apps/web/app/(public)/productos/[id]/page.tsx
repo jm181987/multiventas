@@ -1,3 +1,4 @@
+import type { Metadata } from 'next';
 import Image from 'next/image';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
@@ -11,6 +12,8 @@ import { ProductPurchasePanel } from '@/components/ProductPurchasePanel';
 import { ReviewStars } from '@/components/ReviewStars';
 import { FavoriteButton } from '@/components/FavoriteButton';
 import { ProductViewTracker } from '@/components/ProductViewTracker';
+import { ShareButton } from '@/components/ShareButton';
+import { PersonalizedRecommendations } from '@/components/PersonalizedRecommendations';
 
 export const dynamic = 'force-dynamic';
 
@@ -19,6 +22,51 @@ type ReviewSummary = {
   count: number;
   distribution: Array<{ rating: number; count: number }>;
 };
+
+const siteUrl = 'https://www.sevende.knjpro.site';
+
+function seoDescription(product: Product) {
+  const fallback = `Comprá ${product.title} en ${product.store.name} a través de SeVende.`;
+  return (product.description || fallback).replace(/\s+/g, ' ').trim().slice(0, 160);
+}
+
+function absoluteMedia(url?: string | null) {
+  if (!url) return undefined;
+  if (/^https?:\/\//i.test(url)) return url;
+  return siteUrl + (url.startsWith('/') ? url : '/' + url);
+}
+
+export async function generateMetadata({ params }: { params: { id: string } }): Promise<Metadata> {
+  const product = await publicApi<Product>(`/products/${params.id}`).catch(() => null);
+  if (!product) {
+    return {
+      title: 'Producto no disponible',
+      robots: { index: false, follow: false },
+    };
+  }
+
+  const description = seoDescription(product);
+  const canonical = `/productos/${product.id}`;
+
+  return {
+    title: `${product.title} · ${product.store.name}`,
+    description,
+    alternates: { canonical },
+    openGraph: {
+      type: 'website',
+      locale: 'es_UY',
+      siteName: 'SeVende',
+      url: canonical,
+      title: `${product.title} | ${product.store.name}`,
+      description,
+    },
+    twitter: {
+      card: 'summary_large_image',
+      title: `${product.title} | ${product.store.name}`,
+      description,
+    },
+  };
+}
 
 type ProductReviews = {
   items: Array<{
@@ -39,21 +87,58 @@ export default async function ProductPage({ params }: { params: { id: string } }
   const product = await publicApi<Product>(`/products/${params.id}`).catch(() => null);
   if (!product) notFound();
 
-  const [related, reviews, storeReputation] = await Promise.all([
+  const [related, reviews, storeReputation, similar] = await Promise.all([
     publicApi<ProductSearch>(`/products?store=${encodeURIComponent(product.store.slug)}&limit=5`)
       .catch(() => ({ items: [], total: 0, page: 1, limit: 5 })),
     publicApi<ProductReviews>(`/reviews/products/${product.id}?limit=8`)
       .catch(() => ({ items: [], total: 0, page: 1, limit: 8, summary: { average: 0, count: 0, distribution: [] } })),
     publicApi<ReviewSummary>(`/reviews/stores/${product.store.id}/summary`)
       .catch(() => ({ average: 0, count: 0, distribution: [] })),
+    publicApi<Product[]>(`/recommendations/products/${product.id}/similar`)
+      .catch(() => []),
   ]);
 
   const moreFromSeller = related.items.filter((item) => item.id !== product.id).slice(0, 4);
   const image = product.images?.[0]?.url ?? 'https://placehold.co/1000x1000?text=SeVende';
   const accent = product.store.primaryColor || '#18181b';
+  const productUrl = `${siteUrl}/productos/${product.id}`;
+  const productSchema = {
+    '@context': 'https://schema.org',
+    '@type': 'Product',
+    name: product.title,
+    description: seoDescription(product),
+    image: product.images.map((item) => absoluteMedia(item.url)).filter(Boolean),
+    ...(product.sku ? { sku: product.sku } : {}),
+    category: product.category?.name,
+    offers: {
+      '@type': 'Offer',
+      url: productUrl,
+      priceCurrency: product.currency,
+      price: Number(product.price),
+      availability: product.stock > 0 ? 'https://schema.org/InStock' : 'https://schema.org/OutOfStock',
+      seller: {
+        '@type': 'Organization',
+        name: product.store.name,
+        url: `${siteUrl}/tienda/${product.store.slug}`,
+      },
+    },
+    ...(reviews.summary.count > 0 ? {
+      aggregateRating: {
+        '@type': 'AggregateRating',
+        ratingValue: reviews.summary.average,
+        reviewCount: reviews.summary.count,
+        bestRating: 5,
+        worstRating: 1,
+      },
+    } : {}),
+  };
 
   return (
     <main>
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(productSchema).replace(/</g, '\\u003c') }}
+      />
       <ProductViewTracker productId={product.id} />
       <section className="relative overflow-hidden border-b text-white" style={{ backgroundColor: accent }}>
         {product.store.coverUrl && <img src={product.store.coverUrl} alt="" className="absolute inset-0 h-full w-full object-cover" />}
@@ -157,6 +242,12 @@ export default async function ProductPage({ params }: { params: { id: string } }
               <div className="mt-5 flex flex-wrap gap-2">
                 <ProductPurchasePanel productId={product.id} stock={product.stock} accentColor={accent} />
                 <FavoriteButton productId={product.id} withLabel />
+                <ShareButton
+                  path={`/productos/${product.id}`}
+                  title={product.title}
+                  text={`${product.title} en ${product.store.name} · ${money(product.price, product.currency)}`}
+                  productId={product.id}
+                />
               </div>
             </div>
 
@@ -239,6 +330,17 @@ export default async function ProductPage({ params }: { params: { id: string } }
           </div>
         </section>
 
+        {!!similar.length && (
+          <section className="mt-14 border-t pt-10">
+            <div className="mb-6">
+              <p className="text-sm font-semibold uppercase tracking-widest text-muted-foreground">Descubrí más</p>
+              <h2 className="text-3xl font-black">También te puede interesar</h2>
+              <p className="mt-1 text-sm text-muted-foreground">Productos relacionados por categoría, tienda y rango de precio.</p>
+            </div>
+            <ProductGrid products={similar.slice(0, 8)} accentColor={accent} />
+          </section>
+        )}
+
         {!!moreFromSeller.length && (
           <section className="mt-14 border-t pt-10">
             <div className="mb-6 flex items-end justify-between gap-4">
@@ -251,6 +353,10 @@ export default async function ProductPage({ params }: { params: { id: string } }
             <ProductGrid products={moreFromSeller} accentColor={accent} />
           </section>
         )}
+
+        <div className="mt-14">
+          <PersonalizedRecommendations excludeProductId={product.id} accentColor={accent} />
+        </div>
       </section>
     </main>
   );

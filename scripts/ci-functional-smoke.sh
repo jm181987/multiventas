@@ -196,9 +196,24 @@ echo "$vendor_products" | jq -e 'length == 1 and .[0].slug == "ci-product" and .
 public_vendor_products=$(request GET '/products?q=CI%20Product%20Updated') || fail "public vendor product search"
 echo "$public_vendor_products" | jq -e --arg id "$vendor_product_id" 'any(.items[]; .id == $id and .status == "ACTIVE" and (.deliveryOptions|length) == 2)' >/dev/null || fail "published vendor product or delivery methods are not visible publicly"
 
-request POST "/analytics/products/$vendor_product_id/view" >/tmp/analytics-view-1.json || fail "analytics view 1"
-request POST "/analytics/products/$vendor_product_id/view" >/tmp/analytics-view-2.json || fail "analytics view 2"
-request POST "/analytics/products/$vendor_product_id/view" >/tmp/analytics-view-3.json || fail "analytics view 3"
+recommendation_product_body=$(jq -cn --arg storeId "$store_id" '{storeId:$storeId,slug:"ci-product-rec",sku:"CI-REC",title:"CI Similar Product",price:1199,stock:4,deliveryOptions:[{type:"PICKUP",fee:0,details:"Retiro CI 123"}]}')
+request POST /vendor/products "$vendor_access" "$recommendation_product_body" >/tmp/recommendation-product.json || fail "recommendation product create"
+recommendation_product_id=$(jq -r '.id // empty' /tmp/recommendation-product.json)
+[ -n "$recommendation_product_id" ] || fail "recommendation product id missing"
+request PATCH "/vendor/products/$recommendation_product_id" "$vendor_access" '{"status":"ACTIVE"}' >/tmp/recommendation-product-active.json || fail "recommendation product publish"
+
+similar_products=$(request GET "/recommendations/products/$vendor_product_id/similar") || fail "similar recommendations"
+echo "$similar_products" | jq -e --arg id "$recommendation_product_id" 'any(.[]; .id == $id)' >/dev/null || fail "similar recommendation missing"
+
+recent_body=$(jq -cn --arg first "$recommendation_product_id" --arg second "$vendor_product_id" '{ids:[$first,$second]}')
+recent_products=$(request POST /recommendations/recent "" "$recent_body") || fail "recent recommendations"
+echo "$recent_products" | jq -e --arg first "$recommendation_product_id" --arg second "$vendor_product_id" '.[0].id == $first and any(.[]; .id == $second)' >/dev/null || fail "recent recommendations order invalid"
+
+request POST "/analytics/products/$vendor_product_id/view" "" '{"countView":true,"shared":false}' >/tmp/analytics-view-1.json || fail "analytics view 1"
+request POST "/analytics/products/$vendor_product_id/view" "" '{"countView":true,"shared":false}' >/tmp/analytics-view-2.json || fail "analytics view 2"
+request POST "/analytics/products/$vendor_product_id/view" "" '{"countView":true,"shared":false}' >/tmp/analytics-view-3.json || fail "analytics view 3"
+request POST "/analytics/products/$vendor_product_id/share" >/tmp/analytics-share.json || fail "analytics share"
+request POST "/analytics/products/$vendor_product_id/view" "" '{"countView":false,"shared":true}' >/tmp/analytics-shared-visit.json || fail "analytics shared visit"
 
 public_store=$(request GET /stores/ci-store) || fail "public branded store after publish"
 echo "$public_store" | jq -e '.primaryColor == "#112233" and .productCount >= 1' >/dev/null || fail "branded storefront metadata invalid"
@@ -211,6 +226,9 @@ echo "$favorite_ids" | jq -e --arg id "$vendor_product_id" 'index($id) != null' 
 
 favorites=$(request GET /favorites "$buyer_access") || fail "favorites list"
 echo "$favorites" | jq -e --arg id "$vendor_product_id" 'any(.[]; .product.id == $id and .product.title == "CI Product Updated")' >/dev/null || fail "favorite product missing"
+
+personalized=$(request GET /recommendations/personalized "$buyer_access") || fail "personalized recommendations"
+echo "$personalized" | jq -e --arg id "$recommendation_product_id" 'any(.[]; .id == $id)' >/dev/null || fail "favorites-based recommendation missing"
 
 public_stores=$(request GET '/stores?limit=20') || fail "public stores directory"
 echo "$public_stores" | jq -e 'any(.items[]; .slug == "ci-store" and .name == "CI Store Branded" and .productCount >= 1)' >/dev/null || fail "published vendor store missing from store directory"
@@ -308,9 +326,11 @@ echo "$vendor_analytics" | jq -e --arg id "$vendor_product_id" '
   and .summary.cartAdds >= 2
   and .summary.favoriteAdds >= 1
   and .summary.currentFavorites >= 1
+  and .summary.shares >= 1
+  and .summary.sharedVisits >= 1
   and .summary.orders >= 1
   and .summary.revenue >= 1299
-  and any(.products[]; .productId == $id and .views >= 3 and .cartAdds >= 2 and .favoriteAdds >= 1 and .currentFavorites >= 1 and .orders >= 1 and .revenue >= 1299)
+  and any(.products[]; .productId == $id and .views >= 3 and .cartAdds >= 2 and .favoriteAdds >= 1 and .currentFavorites >= 1 and .shares >= 1 and .sharedVisits >= 1 and .orders >= 1 and .revenue >= 1299)
 ' >/dev/null || fail "vendor commerce analytics invalid"
 
 request DELETE "/favorites/$vendor_product_id" "$buyer_access" >/tmp/favorite-delete.json || fail "favorite delete"
@@ -365,4 +385,4 @@ echo "$store_reputation" | jq -e '.average == 5 and .count >= 1' >/dev/null || f
 
 request DELETE "/vendor/products/$vendor_product_id/images/$vendor_image_id" "$vendor_access" >/tmp/vendor-product-image-delete.json || fail "vendor product image delete"
 
-echo "Functional smoke passed: database, auth, catalog, commerce analytics, favorites, reorder, cart retention, delivery methods, notifications, private order messaging, support cases, vendor dashboard, promotions, verified reviews, tenant isolation and admin flows."
+echo "Functional smoke passed: database, auth, catalog, commerce analytics, share attribution, recommendations, favorites, reorder, cart retention, delivery methods, notifications, private order messaging, support cases, vendor dashboard, promotions, verified reviews, tenant isolation and admin flows."

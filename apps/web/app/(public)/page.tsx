@@ -14,6 +14,7 @@ import { ProductSearch, StoreSearch } from '@/lib/types';
 import { ProductGrid } from '@/components/ProductGrid';
 import { StoreCard } from '@/components/StoreCard';
 import { HowItWorksCarousel } from '@/components/HowItWorksCarousel';
+import { PersonalizedRecommendations } from '@/components/PersonalizedRecommendations';
 
 export const dynamic = 'force-dynamic';
 
@@ -240,6 +241,12 @@ export default async function HomePage() {
             </div>
           )}
           <ProductGrid products={products.items} />
+        </div>
+      </section>
+
+      <section className="bg-[#F8FAFC]">
+        <div className="mx-auto max-w-7xl px-4 pb-16">
+          <PersonalizedRecommendations />
         </div>
       </section>
     </main>

@@ -1,6 +1,6 @@
-import { BadRequestException, Controller, Get, Injectable, Module, Param, Post, Query, UseGuards } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Get, Injectable, Module, Param, Post, Query, UseGuards } from '@nestjs/common';
 import { Type } from 'class-transformer';
-import { IsIn } from 'class-validator';
+import { IsBoolean, IsIn, IsOptional } from 'class-validator';
 import { OrderStatus, ProductStatus, StoreStatus, UserRole } from '@multiventas/db';
 import { DbService } from '../common/db.service';
 import { AuthUser, CurrentUser, Roles } from '../common/decorators';
@@ -12,7 +12,12 @@ class AnalyticsQueryDto {
   days = 30;
 }
 
-type CounterField = 'views' | 'cartAdds' | 'favoriteAdds';
+class ProductViewDto {
+  @IsOptional() @IsBoolean() countView = true;
+  @IsOptional() @IsBoolean() shared = false;
+}
+
+type CounterField = 'views' | 'cartAdds' | 'favoriteAdds' | 'shares';
 
 @Injectable()
 export class AnalyticsService {
@@ -56,8 +61,43 @@ export class AnalyticsService {
     });
   }
 
-  trackView(productId: string) {
-    return this.record(productId, 'views');
+  async trackView(productId: string, dto: ProductViewDto) {
+    return this.db.runSystem(async () => {
+      const product = await this.db.client.product.findFirst({
+        where: {
+          id: productId,
+          status: ProductStatus.ACTIVE,
+          deletedAt: null,
+          store: { status: StoreStatus.ACTIVE, deletedAt: null },
+        },
+        select: { id: true, tenantId: true },
+      });
+      if (!product) throw new BadRequestException('Producto no disponible');
+
+      const date = this.dateOnly();
+      const viewIncrement = dto.countView ? 1 : 0;
+      const sharedIncrement = dto.shared ? 1 : 0;
+
+      await this.db.client.productAnalyticsDaily.upsert({
+        where: { productId_date: { productId: product.id, date } },
+        create: {
+          tenantId: product.tenantId,
+          productId: product.id,
+          date,
+          views: viewIncrement,
+          sharedVisits: sharedIncrement,
+        },
+        update: {
+          ...(viewIncrement ? { views: { increment: viewIncrement } } : {}),
+          ...(sharedIncrement ? { sharedVisits: { increment: sharedIncrement } } : {}),
+        },
+      });
+      return { ok: true };
+    });
+  }
+
+  trackShare(productId: string) {
+    return this.record(productId, 'shares');
   }
 
   trackCartAdd(productId: string) {
@@ -96,6 +136,8 @@ export class AnalyticsService {
           views: true,
           cartAdds: true,
           favoriteAdds: true,
+          shares: true,
+          sharedVisits: true,
         },
         orderBy: { date: 'asc' },
       }),
@@ -138,6 +180,8 @@ export class AnalyticsService {
       views: 0,
       cartAdds: 0,
       favoriteAdds: 0,
+      shares: 0,
+      sharedVisits: 0,
       currentFavorites: currentFavoriteRows.find((row) => row.productId === product.id)?._count.productId ?? 0,
       orderIds: new Set<string>(),
       soldUnits: 0,
@@ -149,6 +193,8 @@ export class AnalyticsService {
       views: number;
       cartAdds: number;
       favoriteAdds: number;
+      shares: number;
+      sharedVisits: number;
       orders: Set<string>;
       soldUnits: number;
       revenue: number;
@@ -163,6 +209,8 @@ export class AnalyticsService {
         views: 0,
         cartAdds: 0,
         favoriteAdds: 0,
+        shares: 0,
+        sharedVisits: 0,
         orders: new Set<string>(),
         soldUnits: 0,
         revenue: 0,
@@ -175,6 +223,8 @@ export class AnalyticsService {
         item.views += row.views;
         item.cartAdds += row.cartAdds;
         item.favoriteAdds += row.favoriteAdds;
+        item.shares += row.shares;
+        item.sharedVisits += row.sharedVisits;
       }
 
       const key = row.date.toISOString().slice(0, 10);
@@ -183,6 +233,8 @@ export class AnalyticsService {
         trend.views += row.views;
         trend.cartAdds += row.cartAdds;
         trend.favoriteAdds += row.favoriteAdds;
+        trend.shares += row.shares;
+        trend.sharedVisits += row.sharedVisits;
       }
     }
 
@@ -217,6 +269,8 @@ export class AnalyticsService {
       cartAdds: item.cartAdds,
       favoriteAdds: item.favoriteAdds,
       currentFavorites: item.currentFavorites,
+      shares: item.shares,
+      sharedVisits: item.sharedVisits,
       orders: item.orderIds.size,
       soldUnits: item.soldUnits,
       revenue: Math.round(item.revenue * 100) / 100,
@@ -230,6 +284,8 @@ export class AnalyticsService {
       acc.cartAdds += item.cartAdds;
       acc.favoriteAdds += item.favoriteAdds;
       acc.currentFavorites += item.currentFavorites;
+      acc.shares += item.shares;
+      acc.sharedVisits += item.sharedVisits;
       acc.soldUnits += item.soldUnits;
       acc.revenue += item.revenue;
       return acc;
@@ -238,6 +294,8 @@ export class AnalyticsService {
       cartAdds: 0,
       favoriteAdds: 0,
       currentFavorites: 0,
+      shares: 0,
+      sharedVisits: 0,
       soldUnits: 0,
       revenue: 0,
     });
@@ -247,6 +305,8 @@ export class AnalyticsService {
       views: point.views,
       cartAdds: point.cartAdds,
       favoriteAdds: point.favoriteAdds,
+      shares: point.shares,
+      sharedVisits: point.sharedVisits,
       orders: point.orders.size,
       soldUnits: point.soldUnits,
       revenue: Math.round(point.revenue * 100) / 100,
@@ -279,8 +339,13 @@ class PublicAnalyticsController {
   constructor(private readonly analytics: AnalyticsService) {}
 
   @Post('products/:productId/view')
-  view(@Param('productId') productId: string) {
-    return this.analytics.trackView(productId);
+  view(@Param('productId') productId: string, @Body() dto: ProductViewDto) {
+    return this.analytics.trackView(productId, dto);
+  }
+
+  @Post('products/:productId/share')
+  share(@Param('productId') productId: string) {
+    return this.analytics.trackShare(productId);
   }
 }
 

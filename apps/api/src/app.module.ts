@@ -24,6 +24,7 @@ import { NotificationsModule } from './notifications/notifications.module';
 import { FavoritesModule } from './favorites/favorites.module';
 import { AnalyticsModule } from './analytics/analytics.module';
 import { ConversationsModule } from './conversations/conversations.module';
+import { RecommendationsModule } from './recommendations/recommendations.module';
 
 @Module({
   imports: [
@@ -48,6 +49,7 @@ import { ConversationsModule } from './conversations/conversations.module';
     FavoritesModule,
     AnalyticsModule,
     ConversationsModule,
+    RecommendationsModule,
     AdminModule,
     HealthModule,
   ],

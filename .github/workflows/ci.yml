@@ -171,6 +171,14 @@ jobs:
           for attempt in $(seq 1 30); do
             if curl --fail --silent http://127.0.0.1:8080/ >/tmp/web-home.html; then
               grep -q "SeVende" /tmp/web-home.html
+              curl --fail --silent http://127.0.0.1:8080/manifest.webmanifest >/tmp/web-manifest.json
+              grep -q "SeVende" /tmp/web-manifest.json
+              curl --fail --silent http://127.0.0.1:8080/sw.js >/tmp/web-sw.js
+              grep -q "sevende-static" /tmp/web-sw.js
+              curl --fail --silent http://127.0.0.1:8080/robots.txt >/tmp/web-robots.txt
+              grep -qi "sitemap" /tmp/web-robots.txt
+              curl --fail --silent http://127.0.0.1:8080/offline >/tmp/web-offline.html
+              grep -q "sin conexión" /tmp/web-offline.html
               exit 0
             fi
             if [ "$(docker inspect -f '{{.State.Running}}' multiventas-web-smoke)" != "true" ]; then

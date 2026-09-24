@@ -7,6 +7,7 @@ import { Store } from '@/lib/types';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
+import { ShareButton } from '@/components/ShareButton';
 
 type EditableStore = Store & {
   description?: string | null;
@@ -204,7 +205,16 @@ export function StoreBrandingManager() {
               </div>
             </div>
 
-            <a href={`/tienda/${selected.slug}`} target="_blank" rel="noreferrer" className="inline-block text-sm font-semibold underline">Ver tienda pública</a>
+            <div className="flex flex-wrap items-center gap-2">
+              <a href={`/tienda/${selected.slug}`} target="_blank" rel="noreferrer" className="inline-block text-sm font-semibold underline">Ver tienda pública</a>
+              {selected.status === 'ACTIVE' && (
+                <ShareButton
+                  path={`/tienda/${selected.slug}`}
+                  title={selected.name}
+                  text={`Conocé ${selected.name} en SeVende`}
+                />
+              )}
+            </div>
           </CardContent>
         </Card>
       </div>

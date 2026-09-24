@@ -3,6 +3,7 @@ import './globals.css';
 import { Providers } from '@/components/providers';
 import { SiteHeader } from '@/components/site-header';
 import { SiteFooter } from '@/components/SiteFooter';
+import { PwaExperience } from '@/components/PwaExperience';
 
 const siteUrl = 'https://www.sevende.knjpro.site';
 const description =
@@ -18,9 +19,17 @@ export const metadata: Metadata = {
   description,
   keywords: ['SeVende', 'KNJ', 'marketplace', 'comprar online', 'vender online', 'Uruguay', 'Mercado Pago'],
   alternates: { canonical: '/' },
+  manifest: '/manifest.webmanifest',
+  themeColor: '#111827',
+  appleWebApp: {
+    capable: true,
+    title: 'SeVende',
+    statusBarStyle: 'black-translucent',
+  },
   icons: {
     icon: [{ url: '/favicon.ico', type: 'image/x-icon' }],
     shortcut: '/favicon.ico',
+    apple: '/knj-logo.webp',
   },
   openGraph: {
     type: 'website',
@@ -43,15 +52,38 @@ export const metadata: Metadata = {
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
+  const websiteSchema = {
+    '@context': 'https://schema.org',
+    '@type': 'WebSite',
+    name: 'SeVende',
+    url: siteUrl,
+    potentialAction: {
+      '@type': 'SearchAction',
+      target: siteUrl + '/productos?q={search_term_string}',
+      'query-input': 'required name=search_term_string',
+    },
+    publisher: {
+      '@type': 'Organization',
+      name: 'KNJ',
+      url: siteUrl,
+      logo: siteUrl + '/knj-logo.webp',
+    },
+  };
+
   return (
-    <html lang="es">
+    <html lang="es-UY">
       <body>
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(websiteSchema).replace(/</g, '\\u003c') }}
+        />
         <Providers>
           <div className="flex min-h-screen flex-col">
             <SiteHeader />
             <div className="flex-1">{children}</div>
             <SiteFooter />
           </div>
+          <PwaExperience />
         </Providers>
       </body>
     </html>
