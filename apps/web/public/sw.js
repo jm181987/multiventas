@@ -1,6 +1,6 @@
-const CACHE = 'sevende-static-v1';
+const CACHE = 'sevende-static-v2';
 const OFFLINE = '/offline';
-const STATIC_ASSETS = [OFFLINE, '/knj-logo.webp', '/favicon.ico'];
+const STATIC_ASSETS = [OFFLINE, '/knj-logo.webp', '/favicon.ico', '/pwa-icon-192.svg', '/pwa-icon-512.svg', '/manifest.webmanifest'];
 
 self.addEventListener('install', (event) => {
   event.waitUntil(caches.open(CACHE).then((cache) => cache.addAll(STATIC_ASSETS)));
