@@ -102,23 +102,65 @@ class RecommendationsService {
 
   async trending() {
     return this.db.runSystem(async () => {
+      const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
       const products = await this.db.client.product.findMany({
         where: this.publicWhere,
         include: {
           ...this.include,
           analytics: {
-            where: { date: { gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) } },
+            where: { date: { gte: since } },
             select: { views: true, cartAdds: true, favoriteAdds: true },
           },
         },
         orderBy: { createdAt: 'desc' },
-        take: 80,
+        take: 120,
       });
+      const sales = products.length
+        ? await this.db.client.orderItem.findMany({
+            where: {
+              productId: { in: products.map((product) => product.id) },
+              order: {
+                status: { in: [OrderStatus.PAID, OrderStatus.SHIPPED, OrderStatus.DELIVERED] },
+                createdAt: { gte: since },
+              },
+            },
+            select: { productId: true, quantity: true, orderId: true },
+          })
+        : [];
+      const salesByProduct = new Map<string, { units: number; orders: Set<string> }>();
+      for (const sale of sales) {
+        if (!sale.productId) continue;
+        const current = salesByProduct.get(sale.productId) ?? { units: 0, orders: new Set<string>() };
+        current.units += sale.quantity;
+        current.orders.add(sale.orderId);
+        salesByProduct.set(sale.productId, current);
+      }
+
       return products
-        .map((product) => ({
-          product,
-          score: product.analytics.reduce((sum, row) => sum + row.views + row.cartAdds * 4 + row.favoriteAdds * 3, 0),
-        }))
+        .map((product) => {
+          const activity = product.analytics.reduce(
+            (sum, row) => ({
+              views: sum.views + row.views,
+              cartAdds: sum.cartAdds + row.cartAdds,
+              favoriteAdds: sum.favoriteAdds + row.favoriteAdds,
+            }),
+            { views: 0, cartAdds: 0, favoriteAdds: 0 },
+          );
+          const sold = salesByProduct.get(product.id) ?? { units: 0, orders: new Set<string>() };
+          const conversion = activity.views > 0 ? sold.orders.size / activity.views : 0;
+          const stockFactor = product.stock > 0 ? 5 : -1000;
+          return {
+            product,
+            score:
+              sold.units * 25
+              + sold.orders.size * 20
+              + Math.min(conversion * 100, 25) * 2
+              + activity.cartAdds * 4
+              + activity.favoriteAdds * 3
+              + Math.min(activity.views, 200) * 0.25
+              + stockFactor,
+          };
+        })
         .sort((a, b) => b.score - a.score)
         .slice(0, 8)
         .map(({ product }) => {

@@ -4,7 +4,7 @@ import { IsEmail, IsNumber, IsOptional, IsString, Max, Min } from 'class-validat
 import { DbService } from '../common/db.service';
 import { Roles } from '../common/decorators';
 import { JwtAuthGuard, RolesGuard } from '../common/guards';
-import { ProductStatus, StoreStatus, UserRole, VendorStatus } from '@multiventas/db';
+import { OrderStatus, ProductStatus, StoreStatus, UserRole, VendorStatus } from '@multiventas/db';
 import { PaymentsModule } from '../payments/payments.module';
 import { MercadoPagoService } from '../payments/mercado-pago.service';
 
@@ -36,6 +36,7 @@ class AdminService {
       gross,
       commissions,
       recentVendors,
+      commercialProducts,
     ] = await Promise.all([
       this.db.client.user.count({ where: { deletedAt: null } }),
       this.db.client.vendor.count({ where: { deletedAt: null } }),
@@ -57,7 +58,74 @@ class AdminService {
         orderBy: { createdAt: 'desc' },
         take: 6,
       }),
+      this.db.client.product.findMany({
+        where: { deletedAt: null, status: ProductStatus.ACTIVE, stock: { gt: 0 } },
+        select: {
+          id: true,
+          title: true,
+          stock: true,
+          store: { select: { name: true } },
+          analytics: {
+            where: { date: { gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) } },
+            select: { views: true, cartAdds: true, favoriteAdds: true },
+          },
+        },
+        orderBy: { createdAt: 'desc' },
+        take: 150,
+      }),
     ]);
+
+    const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+    const commercialSales = commercialProducts.length
+      ? await this.db.client.orderItem.findMany({
+          where: {
+            productId: { in: commercialProducts.map((product) => product.id) },
+            order: {
+              status: { in: [OrderStatus.PAID, OrderStatus.SHIPPED, OrderStatus.DELIVERED] },
+              createdAt: { gte: since },
+            },
+          },
+          select: { productId: true, orderId: true, quantity: true },
+        })
+      : [];
+    const salesByProduct = new Map<string, { orders: Set<string>; units: number }>();
+    for (const sale of commercialSales) {
+      if (!sale.productId) continue;
+      const current = salesByProduct.get(sale.productId) ?? { orders: new Set<string>(), units: 0 };
+      current.orders.add(sale.orderId);
+      current.units += sale.quantity;
+      salesByProduct.set(sale.productId, current);
+    }
+    const commercialOpportunities = commercialProducts
+      .map((product) => {
+        const activity = product.analytics.reduce(
+          (sum, row) => ({
+            views: sum.views + row.views,
+            cartAdds: sum.cartAdds + row.cartAdds,
+            favoriteAdds: sum.favoriteAdds + row.favoriteAdds,
+          }),
+          { views: 0, cartAdds: 0, favoriteAdds: 0 },
+        );
+        const sold = salesByProduct.get(product.id) ?? { orders: new Set<string>(), units: 0 };
+        const conversionRate = activity.views > 0 ? Math.round((sold.orders.size / activity.views) * 10000) / 100 : 0;
+        const opportunityScore = activity.views + activity.cartAdds * 5 + activity.favoriteAdds * 3 - sold.orders.size * 15;
+        return {
+          id: product.id,
+          title: product.title,
+          storeName: product.store.name,
+          stock: product.stock,
+          views: activity.views,
+          cartAdds: activity.cartAdds,
+          favoriteAdds: activity.favoriteAdds,
+          orders: sold.orders.size,
+          soldUnits: sold.units,
+          conversionRate,
+          opportunityScore,
+        };
+      })
+      .filter((product) => product.views >= 5 && (product.orders === 0 || product.conversionRate < 2))
+      .sort((a, b) => b.opportunityScore - a.opportunityScore)
+      .slice(0, 8);
 
     return {
       users,
@@ -72,6 +140,7 @@ class AdminService {
       grossSales: gross._sum.total ?? 0,
       platformCommissions: commissions._sum.amount ?? 0,
       recentVendors,
+      commercialOpportunities,
     };
   }
 
