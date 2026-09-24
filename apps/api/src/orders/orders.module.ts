@@ -1,3 +1,4 @@
+import { Cron } from '@nestjs/schedule';
 import { BadRequestException, Body, Controller, Get, Injectable, Module, Param, Patch, Post, UseGuards } from '@nestjs/common';
 import { IsIn, IsObject, IsOptional, IsString, MaxLength } from 'class-validator';
 import { DbService } from '../common/db.service';
@@ -38,6 +39,39 @@ class OrdersService {
     private readonly promotions: PromotionsService,
     private readonly notifications: NotificationsService,
   ) {}
+
+  @Cron('0 * * * *')
+  async remindPendingOrders() {
+    const cutoff = new Date(Date.now() - 6 * 60 * 60 * 1000);
+    const recentReminderCutoff = new Date(Date.now() - 6 * 60 * 60 * 1000);
+    const pending = await this.db.runSystem(() => this.db.client.order.findMany({
+      where: { status: OrderStatus.PENDING, createdAt: { lte: cutoff } },
+      select: { id: true, tenantId: true, store: { select: { name: true } } },
+      orderBy: { createdAt: 'asc' },
+      take: 100,
+    }));
+
+    for (const order of pending) {
+      const reminded = await this.db.runSystem(() => this.db.client.notification.findFirst({
+        where: {
+          tenantId: order.tenantId,
+          type: NotificationType.ORDER_CREATED,
+          createdAt: { gte: recentReminderCutoff },
+          message: { contains: 'sigue pendiente' },
+          metadata: { path: ['orderId'], equals: order.id },
+        },
+        select: { id: true },
+      }));
+      if (reminded) continue;
+      await this.notifications.createForVendor(order.tenantId, {
+        type: NotificationType.ORDER_CREATED,
+        title: 'Pedido pendiente de atención',
+        message: `Un pedido de ${order.store.name} sigue pendiente. Revisalo para evitar demoras.`,
+        href: '/vendor/pedidos',
+        metadata: { orderId: order.id, reminder: true },
+      });
+    }
+  }
 
   private normalizeDeviceId(deviceId?: string) {
     if (!deviceId) return undefined;
