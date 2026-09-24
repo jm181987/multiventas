@@ -81,7 +81,7 @@ export function NotificationBell({ dark = false }: { dark?: boolean }) {
       </Button>
 
       {open && (
-        <div className="absolute right-0 top-11 z-50 w-[min(92vw,380px)] overflow-hidden rounded-2xl border bg-white text-slate-950 shadow-2xl">
+        <div className="fixed left-3 right-3 top-[calc(4rem+env(safe-area-inset-top)+.75rem)] z-50 max-h-[calc(100dvh-5rem-env(safe-area-inset-top)-env(safe-area-inset-bottom))] overflow-hidden rounded-2xl border bg-white text-slate-950 shadow-2xl sm:absolute sm:left-auto sm:right-0 sm:top-11 sm:max-h-none sm:w-[min(92vw,380px)]">
           <div className="flex items-center justify-between gap-3 border-b p-4">
             <div>
               <p className="font-black">Notificaciones</p>
@@ -98,7 +98,7 @@ export function NotificationBell({ dark = false }: { dark?: boolean }) {
             )}
           </div>
 
-          <div className="max-h-[420px] overflow-y-auto">
+          <div className="max-h-[calc(100dvh-10rem-env(safe-area-inset-top)-env(safe-area-inset-bottom))] overflow-y-auto scrollbar-safe sm:max-h-[420px]">
             {query.isLoading ? (
               <p className="p-5 text-sm text-muted-foreground">Cargando…</p>
             ) : !data?.items.length ? (
