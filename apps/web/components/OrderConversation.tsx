@@ -165,18 +165,18 @@ export function OrderConversation({ orderId }: { orderId: string }) {
   }
 
   return (
-    <div className="space-y-4 rounded-2xl border bg-white p-4 sm:p-5">
+    <div className="min-w-0 space-y-4 overflow-hidden rounded-2xl border bg-white p-3 sm:p-5">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
-          <div className="flex items-center gap-2">
+          <div className="flex min-w-0 items-center gap-2">
             <MessageCircle className="size-5 text-indigo-600" />
-            <h3 className="font-black">Conversación del pedido</h3>
+            <h3 className="min-w-0 font-black">Conversación del pedido</h3>
           </div>
           <p className="mt-1 text-xs text-muted-foreground">
             Chat privado con {data.recipientName}. Solo ustedes pueden ver estos mensajes.
           </p>
         </div>
-        <Button type="button" size="sm" variant="outline" onClick={() => setSupportOpen((value) => !value)}>
+        <Button type="button" size="sm" variant="outline" className="w-full sm:w-auto" onClick={() => setSupportOpen((value) => !value)}>
           <LifeBuoy className="mr-1.5 size-4" /> Necesito ayuda
         </Button>
       </div>
@@ -241,7 +241,7 @@ export function OrderConversation({ orderId }: { orderId: string }) {
         </div>
       )}
 
-      <div className="max-h-80 space-y-3 overflow-y-auto rounded-xl bg-slate-50 p-3 sm:p-4">
+      <div className="scrollbar-safe max-h-[45dvh] min-w-0 space-y-3 overflow-y-auto overflow-x-hidden rounded-xl bg-slate-50 p-3 sm:max-h-80 sm:p-4">
         {!data.messages.length ? (
           <div className="py-8 text-center text-sm text-muted-foreground">
             Todavía no hay mensajes. Usá una respuesta rápida o escribí el primero.
@@ -250,8 +250,8 @@ export function OrderConversation({ orderId }: { orderId: string }) {
           data.messages.map((item) => {
             const mine = item.senderRole === data.role;
             return (
-              <div key={item.id} className={'flex ' + (mine ? 'justify-end' : 'justify-start')}>
-                <div className={'max-w-[88%] rounded-2xl px-3.5 py-2.5 text-sm shadow-sm sm:max-w-[75%] ' + (
+              <div key={item.id} className={'flex min-w-0 ' + (mine ? 'justify-end' : 'justify-start')}>
+                <div className={'min-w-0 max-w-[88%] rounded-2xl px-3.5 py-2.5 text-sm shadow-sm sm:max-w-[75%] ' + (
                   mine
                     ? 'rounded-br-md bg-indigo-600 text-white'
                     : 'rounded-bl-md border bg-white text-slate-800'
@@ -272,12 +272,12 @@ export function OrderConversation({ orderId }: { orderId: string }) {
 
       {data.canMessage ? (
         <>
-          <div className="flex flex-wrap gap-2">
+          <div className="flex min-w-0 flex-wrap gap-2">
             {quick.map((text) => (
               <button
                 key={text}
                 type="button"
-                className="rounded-full border bg-white px-3 py-1.5 text-left text-xs font-semibold transition hover:border-indigo-300 hover:bg-indigo-50"
+                className="max-w-full whitespace-normal break-words rounded-full border bg-white px-3 py-1.5 text-left text-xs font-semibold leading-5 transition hover:border-indigo-300 hover:bg-indigo-50"
                 disabled={send.isPending}
                 onClick={() => send.mutate(text)}
               >
@@ -286,9 +286,9 @@ export function OrderConversation({ orderId }: { orderId: string }) {
             ))}
           </div>
 
-          <form onSubmit={submitMessage} className="flex gap-2">
+          <form onSubmit={submitMessage} className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] gap-2">
             <textarea
-              className="min-h-11 flex-1 resize-y rounded-xl border bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-indigo-200"
+              className="min-h-11 min-w-0 resize-y rounded-xl border bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-indigo-200"
               maxLength={2000}
               placeholder="Escribí un mensaje sobre este pedido…"
               value={message}

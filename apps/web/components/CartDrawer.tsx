@@ -44,24 +44,24 @@ export function CartDrawer() {
   if (!open) return null;
   return (
     <div className="fixed inset-0 z-50 bg-black/30" onClick={() => setOpen(false)}>
-      <aside className="ml-auto flex h-full w-full max-w-md flex-col bg-white shadow-2xl" onClick={(e) => e.stopPropagation()}>
-        <div className="flex items-center justify-between border-b p-5">
+      <aside className="ml-auto flex h-[100dvh] w-full max-w-md min-w-0 flex-col bg-white shadow-2xl" onClick={(e) => e.stopPropagation()}>
+        <div className="safe-area-top flex items-center justify-between gap-3 border-b px-4 pb-4 pt-4 sm:p-5">
           <h2 className="text-lg font-bold">Tu carrito</h2>
           <Button variant="ghost" size="sm" onClick={() => setOpen(false)} aria-label="Cerrar carrito"><X className="size-5" /></Button>
         </div>
-        <div className="flex-1 space-y-4 overflow-auto p-5">
+        <div className="scrollbar-safe flex-1 space-y-4 overflow-y-auto overflow-x-hidden p-4 sm:p-5">
           {isLoading && <p className="text-sm text-muted-foreground">Cargando carrito…</p>}
           {!isLoading && !data.length && <p className="text-sm text-muted-foreground">El carrito está vacío o todavía no iniciaste sesión.</p>}
           {data.map((row) => (
             <div key={row.productId} className="space-y-3 border-b pb-4">
-              <div className="flex justify-between gap-4">
-                <div>
+              <div className="flex min-w-0 flex-col gap-2 sm:flex-row sm:justify-between sm:gap-4">
+                <div className="min-w-0">
                   <p className="font-medium">{row.product.title}</p>
                   <p className="text-sm text-muted-foreground">{row.product.stock} disponibles</p>
                 </div>
-                <span className="font-semibold">{money(Number(row.product.price) * row.quantity, row.product.currency)}</span>
+                <span className="shrink-0 font-semibold">{money(Number(row.product.price) * row.quantity, row.product.currency)}</span>
               </div>
-              <div className="flex items-center justify-between">
+              <div className="flex flex-wrap items-center justify-between gap-2">
                 <div className="flex items-center gap-2">
                   <Button
                     type="button"
@@ -99,7 +99,7 @@ export function CartDrawer() {
             </div>
           ))}
         </div>
-        <div className="space-y-3 border-t p-5">
+        <div className="safe-area-bottom space-y-3 border-t px-4 pt-4 sm:p-5">
           <div className="flex justify-between text-lg font-black"><span>Total</span><span>{money(total)}</span></div>
           <Link href="/checkout" onClick={() => setOpen(false)}>
             <Button className="w-full" disabled={!data.length}>Ir al checkout</Button>

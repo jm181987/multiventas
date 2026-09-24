@@ -19,6 +19,7 @@ export function PwaExperience() {
   const [visible, setVisible] = useState(false);
   const [installed, setInstalled] = useState(false);
   const [platform, setPlatform] = useState<'ios' | 'android' | 'desktop'>('desktop');
+  const [serviceWorkerReady, setServiceWorkerReady] = useState(false);
 
   useEffect(() => {
     const ua = navigator.userAgent.toLowerCase();
@@ -28,7 +29,13 @@ export function PwaExperience() {
     setInstalled(isStandalone());
 
     if ('serviceWorker' in navigator) {
-      void navigator.serviceWorker.register('/sw.js', { scope: '/' }).catch(() => undefined);
+      void navigator.serviceWorker.register('/sw.js', { scope: '/' })
+        .then(async (registration) => {
+          await navigator.serviceWorker.ready;
+          setServiceWorkerReady(Boolean(registration.active || registration.waiting || registration.installing));
+          void registration.update().catch(() => undefined);
+        })
+        .catch(() => setServiceWorkerReady(false));
     }
 
     function onPrompt(event: Event) {
@@ -105,12 +112,12 @@ export function PwaExperience() {
   const InstructionIcon = instructions.Icon;
 
   return (
-    <div className="fixed inset-0 z-[90] flex items-end justify-center bg-slate-950/35 p-3 backdrop-blur-[2px] sm:items-center sm:p-5">
+    <div className="safe-area-inline fixed inset-0 z-[90] flex items-end justify-center bg-slate-950/35 pb-[max(.75rem,env(safe-area-inset-bottom))] pt-[max(.75rem,env(safe-area-inset-top))] backdrop-blur-[2px] sm:items-center sm:p-5">
       <div
         role="dialog"
         aria-modal="true"
         aria-label="Instalar SeVende"
-        className="w-full max-w-md overflow-hidden rounded-2xl border bg-white shadow-2xl"
+        className="max-h-[calc(100dvh-1.5rem-env(safe-area-inset-top)-env(safe-area-inset-bottom))] w-full max-w-md overflow-y-auto rounded-2xl border bg-white shadow-2xl scrollbar-safe"
       >
         <div className="flex items-start gap-3 border-b bg-slate-50 p-4">
           <div className="grid size-12 shrink-0 place-items-center overflow-hidden rounded-xl bg-slate-950 p-1.5">
@@ -164,8 +171,16 @@ export function PwaExperience() {
 
           <div className="flex items-start gap-2 rounded-xl bg-emerald-50 p-3 text-xs leading-5 text-emerald-800">
             <CheckCircle2 className="mt-0.5 size-4 shrink-0" />
-            <span>La versión instalada usa el mismo sitio y mantiene checkout, cuenta y datos sensibles fuera de la caché offline.</span>
+            <span>
+              {serviceWorkerReady
+                ? 'La app está preparada para instalarse y el modo offline básico está activo.'
+                : 'El navegador está preparando la instalación. Si no ofrece el botón directo, usá las instrucciones manuales de arriba.'}
+            </span>
           </div>
+
+          <p className="text-center text-[11px] leading-5 text-muted-foreground">
+            La instalación no cambia tu cuenta ni tu checkout: SeVende sigue usando el sitio seguro y no guarda datos sensibles en la caché offline.
+          </p>
         </div>
       </div>
     </div>

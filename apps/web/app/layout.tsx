@@ -1,4 +1,4 @@
-import type { Metadata } from 'next';
+import type { Metadata, Viewport } from 'next';
 import './globals.css';
 import { Providers } from '@/components/providers';
 import { SiteHeader } from '@/components/site-header';
@@ -8,6 +8,13 @@ import { PwaExperience } from '@/components/PwaExperience';
 const siteUrl = 'https://www.sevende.knjpro.site';
 const description =
   'SeVende es el marketplace de KNJ para comprar y vender online en Uruguay. Descubrí productos, tiendas independientes y pagos seguros con Mercado Pago.';
+
+export const viewport: Viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  viewportFit: 'cover',
+  themeColor: '#111827',
+};
 
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),
@@ -20,7 +27,6 @@ export const metadata: Metadata = {
   keywords: ['SeVende', 'KNJ', 'marketplace', 'comprar online', 'vender online', 'Uruguay', 'Mercado Pago'],
   alternates: { canonical: '/' },
   manifest: '/manifest.webmanifest',
-  themeColor: '#111827',
   appleWebApp: {
     capable: true,
     title: 'SeVende',
@@ -78,7 +84,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
           dangerouslySetInnerHTML={{ __html: JSON.stringify(websiteSchema).replace(/</g, '\\u003c') }}
         />
         <Providers>
-          <div className="flex min-h-screen flex-col">
+          <div className="app-shell flex min-h-[100dvh] min-w-0 flex-col">
             <SiteHeader />
             <div className="flex-1">{children}</div>
             <SiteFooter />
