@@ -27,7 +27,8 @@ function NotificationIcon({ type }: { type: string }) {
   if (type === 'PAYMENT_APPROVED') return <CircleDollarSign className="size-4 text-emerald-600" />;
   if (type === 'ORDER_SHIPPED') return <Truck className="size-4 text-indigo-600" />;
   if (type === 'ORDER_DELIVERED' || type === 'REVIEW_REQUEST') return <PackageCheck className="size-4 text-emerald-600" />;
-  if (type === 'REVIEW_RECEIVED' || type === 'REVIEW_PUBLISHED') return <MessageSquareText className="size-4 text-violet-600" />;
+  if (type === 'REVIEW_RECEIVED' || type === 'REVIEW_PUBLISHED' || type === 'MESSAGE_RECEIVED') return <MessageSquareText className="size-4 text-violet-600" />;
+  if (type === 'SUPPORT_CASE_CREATED' || type === 'SUPPORT_CASE_UPDATED') return <TriangleAlert className="size-4 text-amber-600" />;
   if (type === 'STOCK_LOW' || type === 'PAYMENT_FAILED' || type === 'ORDER_CANCELLED') return <TriangleAlert className="size-4 text-amber-600" />;
   if (type === 'CART_ABANDONED') return <ShoppingBag className="size-4 text-rose-500" />;
   return <ShoppingBag className="size-4 text-indigo-600" />;

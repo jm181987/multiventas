@@ -14,6 +14,8 @@ const TENANT_MODELS = new Set([
   'Review',
   'ProductDeliveryOption',
   'ProductAnalyticsDaily',
+  'OrderMessage',
+  'SupportCase',
   'AuditLog',
 ]);
 

@@ -32,6 +32,14 @@ export class NotificationsService {
     }));
   }
 
+  async createForAdmins(input: Omit<NotificationInput, 'userId' | 'tenantId'>) {
+    const admins = await this.db.runSystem(() => this.db.client.user.findMany({
+      where: { roles: { has: 'ADMIN' }, deletedAt: null, status: 'ACTIVE' },
+      select: { id: true },
+    }));
+    return Promise.all(admins.map((admin) => this.create({ ...input, userId: admin.id })));
+  }
+
   async createForVendor(tenantId: string, input: Omit<NotificationInput, 'userId' | 'tenantId'>) {
     const vendor = await this.db.runSystem(() => this.db.client.vendor.findUnique({
       where: { id: tenantId },
