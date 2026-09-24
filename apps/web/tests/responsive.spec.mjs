@@ -34,6 +34,29 @@ for (const viewport of viewports) {
       await page.waitForTimeout(250);
       await assertNoPageOverflow(page, route + ' @ ' + viewport.width);
     }
+
+    const productResponse = await page.request.get(baseURL + '/api/products?limit=1');
+    if (productResponse.ok()) {
+      const products = await productResponse.json();
+      const productId = products?.items?.[0]?.id;
+      if (productId) {
+        await page.goto(baseURL + '/productos/' + productId, { waitUntil: 'domcontentloaded' });
+        await page.waitForTimeout(250);
+        await assertNoPageOverflow(page, 'product detail @ ' + viewport.width);
+      }
+    }
+
+    const storeResponse = await page.request.get(baseURL + '/api/stores?limit=1');
+    if (storeResponse.ok()) {
+      const stores = await storeResponse.json();
+      const storeSlug = stores?.items?.[0]?.slug;
+      if (storeSlug) {
+        await page.goto(baseURL + '/tienda/' + storeSlug, { waitUntil: 'domcontentloaded' });
+        await page.waitForTimeout(250);
+        await assertNoPageOverflow(page, 'storefront @ ' + viewport.width);
+      }
+    }
+
     await context.close();
   });
 }
@@ -85,6 +108,16 @@ test('vendor dashboard content fits 320px', async ({ browser }) => {
   await login(page, 'vendedor1@multiventas.local', vendorPassword, '/vendor/analitica');
   await expect(page.getByRole('heading', { name: 'Analítica' })).toBeVisible();
   await assertNoPageOverflow(page, 'vendor analytics');
+
+  const notifications = page.getByRole('button', { name: 'Notificaciones' });
+  await notifications.click();
+  await expect(page.getByText('Notificaciones').last()).toBeVisible();
+  await assertNoPageOverflow(page, 'mobile notifications');
+  await notifications.click();
+
+  await page.getByRole('button', { name: 'Abrir carrito' }).click();
+  await expect(page.getByRole('heading', { name: 'Tu carrito' })).toBeVisible();
+  await assertNoPageOverflow(page, 'mobile cart');
   await context.close();
 });
 
