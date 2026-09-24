@@ -519,6 +519,8 @@ model ProductAnalyticsDaily {
   views        Int      @default(0)
   cartAdds     Int      @default(0) @map("cart_adds")
   favoriteAdds Int      @default(0) @map("favorite_adds")
+  shares       Int      @default(0)
+  sharedVisits Int      @default(0) @map("shared_visits")
   createdAt    DateTime @default(now()) @map("created_at")
   updatedAt    DateTime @updatedAt @map("updated_at")
   product      Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
