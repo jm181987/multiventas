@@ -52,20 +52,9 @@ export function SiteHeader() {
               <Link key={href} href={href} className={navClass}>{label}</Link>
             ))}
           </nav>
-
-          <div className="hidden lg:block">
-            <InstallAppButton
-              className={`inline-flex h-9 items-center gap-2 rounded-md border px-3 text-sm font-semibold transition ${
-                premiumHome
-                  ? 'border-white/[.12] bg-white/[.04] text-white hover:bg-white/[.08]'
-                  : 'bg-white hover:bg-muted'
-              }`}
-            />
-          </div>
-
           <InstallAppButton
             compact
-            className={`grid size-9 shrink-0 place-items-center rounded-md border transition lg:hidden ${
+            className={`grid size-9 shrink-0 place-items-center rounded-md border transition md:hidden ${
               premiumHome
                 ? 'border-white/[.12] bg-white/[.04] text-white hover:bg-white/[.08]'
                 : 'bg-white hover:bg-muted'
