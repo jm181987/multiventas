@@ -11,6 +11,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { OrderStatusTimeline } from '@/components/OrderStatusTimeline';
+import { ConversationUnreadBadge, OrderConversation } from '@/components/OrderConversation';
 
 type OrderStatus = 'PENDING' | 'PAID' | 'SHIPPED' | 'DELIVERED' | 'CANCELLED';
 
@@ -241,7 +242,9 @@ export function VendorOrdersManager() {
                         <Link href={`/tienda/${order.store.slug}`} target="_blank">
                           <Button variant="outline" size="sm"><ExternalLink className="mr-1 size-4" /> Ver tienda</Button>
                         </Link>
-                        <Button variant="outline" size="sm" onClick={() => setExpanded(isOpen ? null : order.id)}>{isOpen ? 'Ocultar' : 'Ver detalle'}</Button>
+                        <Button variant="outline" size="sm" onClick={() => setExpanded(isOpen ? null : order.id)}>
+                          {isOpen ? 'Ocultar' : 'Ver detalle'} <ConversationUnreadBadge orderId={order.id} />
+                        </Button>
                         {action && (
                           <Button
                             size="sm"
@@ -299,6 +302,7 @@ export function VendorOrdersManager() {
                             )}
                             <div className="mt-2 flex justify-between border-t pt-2 text-lg font-black"><span>Total</span><span>{money(Number(order.total), order.currency)}</span></div>
                           </div>
+                          <OrderConversation orderId={order.id} />
                         </div>
 
                         <div className="space-y-4 text-sm">
