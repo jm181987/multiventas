@@ -1,9 +1,22 @@
+import type { Metadata } from 'next';
 import { publicApi } from '@/lib/api';
 import { ProductSearch } from '@/lib/types';
 import { ProductGrid } from '@/components/ProductGrid';
 import { FilterSidebar } from '@/components/FilterSidebar';
 
 export const dynamic = 'force-dynamic';
+
+export const metadata: Metadata = {
+  title: 'Productos',
+  description: 'Explorá productos de múltiples tiendas independientes en SeVende. Comprá online con una experiencia simple y pagos mediante Mercado Pago.',
+  alternates: { canonical: '/productos' },
+  openGraph: {
+    type: 'website',
+    url: '/productos',
+    title: 'Productos | SeVende',
+    description: 'Explorá productos de múltiples tiendas independientes en SeVende.',
+  },
+};
 
 const EMPTY_PRODUCTS: ProductSearch = { items: [], total: 0, page: 1, limit: 24 };
 
