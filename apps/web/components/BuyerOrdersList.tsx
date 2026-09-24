@@ -12,6 +12,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { OrderStatusTimeline } from '@/components/OrderStatusTimeline';
 import { ProductReviewAction } from '@/components/ProductReviewAction';
 import { useCartUi } from '@/store/cart';
+import { ConversationUnreadBadge, OrderConversation } from '@/components/OrderConversation';
 
 type OrderStatus = 'PENDING' | 'PAID' | 'SHIPPED' | 'DELIVERED' | 'CANCELLED';
 
@@ -257,7 +258,7 @@ export function BuyerOrdersList() {
                           </Button>
                         )}
                         <Button variant="outline" size="sm" onClick={() => setExpanded(isOpen ? null : order.id)}>
-                          {isOpen ? 'Ocultar detalle' : 'Ver detalle'} <ChevronDown className={`ml-1 size-4 transition ${isOpen ? 'rotate-180' : ''}`} />
+                          {isOpen ? 'Ocultar detalle' : 'Ver detalle'} <ConversationUnreadBadge orderId={order.id} /> <ChevronDown className={`ml-1 size-4 transition ${isOpen ? 'rotate-180' : ''}`} />
                         </Button>
                         {order.status === 'PENDING' && (
                           <Button
@@ -305,6 +306,7 @@ export function BuyerOrdersList() {
                             </div>
                           ))}
                         </div>
+                        <OrderConversation orderId={order.id} />
                       </div>
 
                       <div className="space-y-4 text-sm">
