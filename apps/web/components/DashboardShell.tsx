@@ -32,7 +32,7 @@ export function DashboardShell({ kind, children }: { kind: 'vendor' | 'admin'; c
 
   const links = kind === 'vendor'
     ? [['/vendor','Resumen'],['/vendor/analitica','Analítica'],['/vendor/productos','Productos'],['/vendor/pedidos','Pedidos'],['/vendor/promociones','Promociones'],['/vendor/configuracion','Configuración'],['/vendor/mercadopago','Mercado Pago']]
-    : [['/admin','Resumen'],['/admin/vendedores','Vendedores'],['/admin/usuarios','Usuarios'],['/admin/pedidos','Pedidos'],['/admin/soporte','Soporte'],['/admin/resenas','Reseñas'],['/admin/transacciones','Transacciones'],['/admin/comisiones','Comisiones'],['/admin/configuracion','Configuración']];
+    : [['/admin','Resumen'],['/admin/categorias','Categorías'],['/admin/vendedores','Vendedores'],['/admin/usuarios','Usuarios'],['/admin/pedidos','Pedidos'],['/admin/soporte','Soporte'],['/admin/resenas','Reseñas'],['/admin/transacciones','Transacciones'],['/admin/comisiones','Comisiones'],['/admin/configuracion','Configuración']];
 
   return (
     <div className="mx-auto grid w-full max-w-7xl min-w-0 gap-5 px-3 py-5 sm:px-4 sm:py-6 lg:grid-cols-[220px_minmax(0,1fr)] lg:gap-8 lg:py-8">
