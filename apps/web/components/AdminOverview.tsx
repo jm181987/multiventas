@@ -21,6 +21,7 @@ type Dashboard = {
   orders: number;
   grossSales: string | number;
   platformCommissions: string | number;
+  marketplaceHealth: { productsWithoutImages: number; productsWithoutCategory: number; outOfStockProducts: number; storesWithoutMercadoPago: number; stalePendingOrders: number; totalIssues: number };
   commercialOpportunities: Array<{ id: string; title: string; storeName: string; stock: number; views: number; cartAdds: number; favoriteAdds: number; orders: number; soldUnits: number; conversionRate: number }>;
   recentVendors: Array<{
     id: string;
@@ -78,6 +79,29 @@ export function AdminOverview() {
           </Card>
         ))}
       </div>
+
+      <Card>
+        <CardHeader className="border-b">
+          <div>
+            <h2 className="text-xl font-bold">Salud del marketplace</h2>
+            <p className="text-sm text-muted-foreground">Problemas operativos que pueden estar frenando ventas.</p>
+          </div>
+        </CardHeader>
+        <CardContent className="grid gap-3 pt-5 sm:grid-cols-2 lg:grid-cols-5">
+          {[
+            ['Sin imágenes', data.marketplaceHealth.productsWithoutImages],
+            ['Sin categoría', data.marketplaceHealth.productsWithoutCategory],
+            ['Sin stock', data.marketplaceHealth.outOfStockProducts],
+            ['Sin Mercado Pago', data.marketplaceHealth.storesWithoutMercadoPago],
+            ['Pedidos +24 h', data.marketplaceHealth.stalePendingOrders],
+          ].map(([label, value]) => (
+            <div key={String(label)} className="rounded-xl border p-4">
+              <p className="text-2xl font-black">{value}</p>
+              <p className="text-xs font-semibold text-muted-foreground">{label}</p>
+            </div>
+          ))}
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader className="border-b">

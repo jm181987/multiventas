@@ -37,6 +37,11 @@ class AdminService {
       commissions,
       recentVendors,
       commercialProducts,
+      productsWithoutImages,
+      productsWithoutCategory,
+      outOfStockProducts,
+      storesWithoutMercadoPago,
+      stalePendingOrders,
     ] = await Promise.all([
       this.db.client.user.count({ where: { deletedAt: null } }),
       this.db.client.vendor.count({ where: { deletedAt: null } }),
@@ -72,6 +77,22 @@ class AdminService {
         },
         orderBy: { createdAt: 'desc' },
         take: 150,
+      }),
+      this.db.client.product.count({ where: { deletedAt: null, status: ProductStatus.ACTIVE, images: { none: {} } } }),
+      this.db.client.product.count({ where: { deletedAt: null, status: ProductStatus.ACTIVE, categoryId: null } }),
+      this.db.client.product.count({ where: { deletedAt: null, status: ProductStatus.ACTIVE, stock: 0 } }),
+      this.db.client.store.count({
+        where: {
+          deletedAt: null,
+          status: StoreStatus.ACTIVE,
+          vendor: { oauthTokens: { none: { provider: 'MERCADO_PAGO' } } },
+        },
+      }),
+      this.db.client.order.count({
+        where: {
+          status: OrderStatus.PENDING,
+          createdAt: { lt: new Date(Date.now() - 24 * 60 * 60 * 1000) },
+        },
       }),
     ]);
 
@@ -141,6 +162,14 @@ class AdminService {
       platformCommissions: commissions._sum.amount ?? 0,
       recentVendors,
       commercialOpportunities,
+      marketplaceHealth: {
+        productsWithoutImages,
+        productsWithoutCategory,
+        outOfStockProducts,
+        storesWithoutMercadoPago,
+        stalePendingOrders,
+        totalIssues: productsWithoutImages + productsWithoutCategory + outOfStockProducts + storesWithoutMercadoPago + stalePendingOrders,
+      },
     };
   }
 
