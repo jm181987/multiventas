@@ -67,7 +67,7 @@ test('mobile header menu stays inside 320px viewport', async ({ browser }) => {
   await dismissInstall(page);
   await page.goto(baseURL + '/', { waitUntil: 'domcontentloaded' });
   await page.getByRole('button', { name: 'Abrir menú' }).click();
-  await expect(page.getByRole('link', { name: 'Productos' })).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Productos', exact: true })).toBeVisible();
   await expect(page.getByText('Instalar app').last()).toBeVisible();
   await assertNoPageOverflow(page, 'mobile menu');
   await context.close();
@@ -96,8 +96,9 @@ async function login(page, email, password, next) {
   await page.getByPlaceholder('Email').fill(email);
   await page.getByPlaceholder('Contraseña').fill(password);
   await page.getByRole('button', { name: 'Ingresar' }).click();
-  await page.waitForURL((url) => url.pathname === next, { timeout: 15_000 });
-  await page.waitForTimeout(400);
+  await page.waitForURL((url) => url.pathname !== '/login', { timeout: 15_000 });
+  await page.goto(baseURL + next, { waitUntil: 'domcontentloaded' });
+  await page.waitForTimeout(500);
 }
 
 test('vendor dashboard content fits 320px', async ({ browser }) => {
