@@ -282,5 +282,5 @@ jobs:
           BASE_URL=http://127.0.0.1:8081 \
             SEED_VENDOR_PASSWORD="$SEED_VENDOR_PASSWORD" \
             SEED_ADMIN_PASSWORD="$SEED_ADMIN_PASSWORD" \
-            pnpm dlx @playwright/test@1.55.0 test apps/web/tests/responsive.spec.ts --reporter=line
+            pnpm dlx @playwright/test@1.55.0 test apps/web/tests/responsive.spec.mjs --reporter=line
 
