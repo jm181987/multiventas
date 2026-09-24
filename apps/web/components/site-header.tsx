@@ -9,6 +9,7 @@ import { useCartUi } from '@/store/cart';
 import { CartDrawer } from './CartDrawer';
 import { useAuthSession } from '@/components/auth-provider';
 import { NotificationBell } from '@/components/NotificationBell';
+import { InstallAppButton } from '@/components/InstallAppButton';
 
 export function SiteHeader() {
   const toggle = useCartUi((s) => s.toggle);
@@ -51,6 +52,16 @@ export function SiteHeader() {
               <Link key={href} href={href} className={navClass}>{label}</Link>
             ))}
           </nav>
+
+          <div className="hidden lg:block">
+            <InstallAppButton
+              className={`inline-flex h-9 items-center gap-2 rounded-md border px-3 text-sm font-semibold transition ${
+                premiumHome
+                  ? 'border-white/[.12] bg-white/[.04] text-white hover:bg-white/[.08]'
+                  : 'bg-white hover:bg-muted'
+              }`}
+            />
+          </div>
 
           <NotificationBell dark={premiumHome} />
 
@@ -125,6 +136,11 @@ export function SiteHeader() {
                   {label}
                 </Link>
               ))}
+              <InstallAppButton
+                className={`flex w-full items-center gap-2 py-3 text-left text-sm font-semibold ${
+                  premiumHome ? 'text-[#CBD5E1]' : ''
+                }`}
+              />
               {user ? (
                 <>
                   <Link href="/perfil" className={`py-3 text-sm font-medium ${premiumHome ? 'text-[#CBD5E1]' : ''}`} onClick={() => setMobileOpen(false)}>
