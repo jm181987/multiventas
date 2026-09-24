@@ -41,12 +41,13 @@ const features = [
 
 export default async function HomePage() {
   let catalogError = false;
-  const [products, stores] = await Promise.all([
+  const [products, stores, trending] = await Promise.all([
     publicApi<ProductSearch>('/products?limit=8').catch(() => {
       catalogError = true;
       return { items: [], total: 0, page: 1, limit: 8 };
     }),
     publicApi<StoreSearch>('/stores?limit=6').catch(() => ({ items: [], total: 0, page: 1, limit: 6 })),
+    publicApi<any[]>('/recommendations/trending').catch(() => []),
   ]);
 
   return (
@@ -202,6 +203,22 @@ export default async function HomePage() {
       </section>
 
       <HowItWorksCarousel />
+
+      {!!trending.length && (
+        <section className="border-b border-slate-200 bg-white">
+          <div className="mx-auto max-w-7xl px-4 py-14 sm:py-16">
+            <div className="mb-8 flex items-end justify-between gap-4">
+              <div>
+                <p className="text-sm font-semibold uppercase tracking-widest text-[#6366F1]">Tendencias</p>
+                <h2 className="mt-1 text-3xl font-black tracking-tight text-slate-950">Lo que más interesa ahora</h2>
+                <p className="mt-2 text-slate-500">Productos con más interacción reciente en SeVende.</p>
+              </div>
+              <Link href="/productos" className="shrink-0 text-sm font-semibold text-[#4F46E5]">Explorar →</Link>
+            </div>
+            <ProductGrid products={trending} />
+          </div>
+        </section>
+      )}
 
       {!!stores.items.length && (
         <section className="border-b border-slate-200 bg-[#F8FAFC]">

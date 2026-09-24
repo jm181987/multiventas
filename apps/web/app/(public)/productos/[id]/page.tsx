@@ -197,9 +197,9 @@ export default async function ProductPage({ params }: { params: { id: string } }
               {product.description && <p className="mt-4 whitespace-pre-line leading-7 text-muted-foreground">{product.description}</p>}
             </div>
 
-            <div className="rounded-2xl border p-5" style={{ borderColor: `${accent}44` }}>
+            <div className="sticky top-20 rounded-2xl border bg-white p-5 shadow-sm" style={{ borderColor: `${accent}44` }}>
               <p className="text-4xl font-black">{money(product.price, product.currency)}</p>
-              <p className="mt-2 text-sm text-muted-foreground">Stock disponible: {product.stock}</p>
+              <div className="mt-2 flex flex-wrap items-center gap-2 text-sm"><span className={product.stock > 0 ? "font-semibold text-emerald-700" : "font-semibold text-red-600"}>{product.stock > 0 ? `Disponible · ${product.stock} en stock` : "Sin stock"}</span><span className="text-muted-foreground">· Compra protegida por la plataforma</span></div>
 
               <div className="mt-5 space-y-2">
                 <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Formas de entrega</p>
