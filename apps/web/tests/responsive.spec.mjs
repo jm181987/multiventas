@@ -16,7 +16,7 @@ async function dismissInstall(page) {
   await page.addInitScript(() => sessionStorage.setItem('sv-install-dismissed', '1'));
 }
 
-async function assertNoPageOverflow(page, label: string) {
+async function assertNoPageOverflow(page, label) {
   const result = await page.evaluate(() => ({
     width: window.innerWidth,
     rootWidth: Math.max(document.documentElement.scrollWidth, document.body?.scrollWidth || 0),
@@ -91,7 +91,7 @@ test('PWA install help is always reachable and fits the viewport', async ({ brow
   await context.close();
 });
 
-async function login(page, email: string, password: string, next: string) {
+async function login(page, email, password, next) {
   await page.goto(baseURL + '/login?next=' + encodeURIComponent(next), { waitUntil: 'domcontentloaded' });
   await page.getByPlaceholder('Email').fill(email);
   await page.getByPlaceholder('Contraseña').fill(password);
