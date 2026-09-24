@@ -5,7 +5,7 @@ import { IsHexColor, IsIn, IsInt, IsOptional, IsString, Max, Min } from 'class-v
 import { DbService } from '../common/db.service';
 import { AuthUser, CurrentUser, Roles } from '../common/decorators';
 import { JwtAuthGuard, RolesGuard } from '../common/guards';
-import { ProductStatus, StoreStatus, UserRole, VendorStatus } from '@multiventas/db';
+import { OrderStatus, ProductStatus, StoreStatus, UserRole, VendorStatus } from '@multiventas/db';
 import { StorageService } from '../storage/storage.module';
 
 class StoreDto {
@@ -125,6 +125,9 @@ class StoresService {
             products: {
               where: { status: ProductStatus.ACTIVE, deletedAt: null },
             },
+            orders: {
+              where: { status: { in: [OrderStatus.PAID, OrderStatus.SHIPPED, OrderStatus.DELIVERED] } },
+            },
           },
         },
       },
@@ -132,6 +135,7 @@ class StoresService {
     return store ? this.normalizeStore({
       ...store,
       productCount: store._count.products,
+      completedSales: store._count.orders,
     }) : null;
   }
 
