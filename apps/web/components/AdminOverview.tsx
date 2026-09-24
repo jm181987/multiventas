@@ -95,9 +95,9 @@ export function AdminOverview() {
                   <p className="text-sm text-muted-foreground">{product.storeName} · {product.stock} en stock</p>
                 </div>
                 <div className="flex flex-wrap gap-2 text-xs">
-                  <Badge variant="secondary">{product.views} vistas</Badge>
-                  <Badge variant="secondary">{product.cartAdds} carritos</Badge>
-                  <Badge variant="secondary">{product.orders} ventas</Badge>
+                  <Badge>{product.views} vistas</Badge>
+                  <Badge>{product.cartAdds} carritos</Badge>
+                  <Badge>{product.orders} ventas</Badge>
                   <Badge className={product.conversionRate < 1 ? 'bg-amber-100 text-amber-800' : 'bg-sky-100 text-sky-800'}>
                     {product.conversionRate}% conversión
                   </Badge>
