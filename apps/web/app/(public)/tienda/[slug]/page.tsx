@@ -13,6 +13,7 @@ export const dynamic = 'force-dynamic';
 
 type PublicStore = StoreType & {
   productCount?: number;
+  completedSales?: number;
   vendor?: { businessName?: string | null };
 };
 
@@ -51,11 +52,13 @@ export async function generateMetadata({ params }: { params: { slug: string } })
       url: canonical,
       title: `${store.name} | SeVende`,
       description,
+      ...(store.coverUrl ? { images: [absoluteMedia(store.coverUrl)!] } : store.logoUrl ? { images: [absoluteMedia(store.logoUrl)!] } : {}),
     },
     twitter: {
       card: 'summary_large_image',
       title: `${store.name} | SeVende`,
       description,
+      ...(store.coverUrl ? { images: [absoluteMedia(store.coverUrl)!] } : store.logoUrl ? { images: [absoluteMedia(store.logoUrl)!] } : {}),
     },
   };
 }
@@ -143,6 +146,8 @@ export default async function StorePage({
             {store.description && <p className="mt-3 max-w-3xl text-base text-white/90 sm:text-lg">{store.description}</p>}
             <div className="mt-3 flex flex-wrap items-center gap-4 text-sm text-white/80">
               <span>{store.productCount ?? products.total} productos publicados</span>
+              {(store.completedSales ?? 0) > 0 && <span><strong className="text-white">{store.completedSales}</strong> ventas completadas</span>}
+              <span>En SeVende desde {new Date(store.createdAt).getFullYear()}</span>
               {reputation.count > 0 && (
                 <span className="inline-flex items-center gap-2 rounded-full bg-black/20 px-3 py-1 backdrop-blur">
                   <ReviewStars rating={reputation.average} />
