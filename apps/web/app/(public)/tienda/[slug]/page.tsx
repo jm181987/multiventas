@@ -130,13 +130,13 @@ export default async function StorePage({
       <section className="relative overflow-hidden border-b text-white" style={{ backgroundColor: accent }}>
         {store.coverUrl && <img src={store.coverUrl} alt="" className="absolute inset-0 h-full w-full object-cover" />}
         <div className="absolute inset-0 bg-black/45" />
-        <div className="relative mx-auto flex min-h-[320px] max-w-7xl flex-col justify-end gap-5 px-4 py-12 sm:flex-row sm:items-end sm:justify-start">
+        <div className="relative mx-auto flex min-h-[320px] max-w-7xl min-w-0 flex-col justify-end gap-5 px-4 py-10 sm:flex-row sm:items-end sm:justify-start sm:py-12">
           <div className="grid size-28 shrink-0 place-items-center overflow-hidden rounded-3xl border-4 border-white bg-white text-zinc-900 shadow-2xl">
             {store.logoUrl ? <img src={store.logoUrl} alt={store.name} className="h-full w-full object-cover" /> : <Store className="size-12" />}
           </div>
           <div className="min-w-0 pb-1">
             <div className="flex flex-wrap items-center gap-2">
-              <h1 className="text-4xl font-black sm:text-5xl">{store.name}</h1>
+              <h1 className="break-words text-3xl font-black sm:text-5xl">{store.name}</h1>
               <span className="inline-flex items-center rounded-full bg-white/15 px-3 py-1 text-xs font-semibold backdrop-blur"><ShieldCheck className="mr-1 size-3.5" /> Tienda verificada</span>
             </div>
             {store.vendor?.businessName && <p className="mt-1 text-sm text-white/75">{store.vendor.businessName}</p>}
