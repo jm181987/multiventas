@@ -28,6 +28,8 @@ type AnalyticsProduct = {
   cartAdds: number;
   favoriteAdds: number;
   currentFavorites: number;
+  shares: number;
+  sharedVisits: number;
   orders: number;
   soldUnits: number;
   revenue: number;
@@ -45,6 +47,8 @@ type AnalyticsData = {
     cartAdds: number;
     favoriteAdds: number;
     currentFavorites: number;
+    shares: number;
+    sharedVisits: number;
     orders: number;
     soldUnits: number;
     revenue: number;
@@ -57,6 +61,8 @@ type AnalyticsData = {
     views: number;
     cartAdds: number;
     favoriteAdds: number;
+    shares: number;
+    sharedVisits: number;
     orders: number;
     soldUnits: number;
     revenue: number;
@@ -64,12 +70,13 @@ type AnalyticsData = {
   products: AnalyticsProduct[];
 };
 
-type SortKey = 'views' | 'cartAdds' | 'favoriteAdds' | 'conversionRate' | 'revenue';
+type SortKey = 'views' | 'cartAdds' | 'favoriteAdds' | 'shares' | 'conversionRate' | 'revenue';
 
 const sortLabels: Record<SortKey, string> = {
   views: 'Más vistos',
   cartAdds: 'Más agregados al carrito',
   favoriteAdds: 'Más guardados',
+  shares: 'Más compartidos',
   conversionRate: 'Mejor conversión',
   revenue: 'Más ventas',
 };
@@ -115,6 +122,7 @@ export function VendorAnalytics() {
     ['Vistas', data.summary.views.toLocaleString('es-UY'), 'Fichas de producto vistas', Eye, 'bg-indigo-50 text-indigo-600'],
     ['Al carrito', data.summary.cartAdds.toLocaleString('es-UY'), pct(data.summary.cartRate) + ' de las vistas', ShoppingCart, 'bg-cyan-50 text-cyan-600'],
     ['Favoritos', data.summary.favoriteAdds.toLocaleString('es-UY'), data.summary.currentFavorites + ' guardados ahora', Heart, 'bg-rose-50 text-rose-600'],
+    ['Compartidos', data.summary.shares.toLocaleString('es-UY'), data.summary.sharedVisits + ' visitas desde enlaces', TrendingUp, 'bg-sky-50 text-sky-600'],
     ['Conversión', pct(data.summary.conversionRate), data.summary.orders + ' pedidos confirmados', Percent, 'bg-violet-50 text-violet-600'],
     ['Ventas', money(data.summary.revenue, 'UYU'), data.summary.soldUnits + ' unidades', CircleDollarSign, 'bg-emerald-50 text-emerald-600'],
   ] as const;
@@ -144,7 +152,7 @@ export function VendorAnalytics() {
         </div>
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-6">
         {metricCards.map(([label, value, detail, Icon, accent]) => (
           <Card key={label}>
             <CardContent className="p-5">
@@ -302,6 +310,9 @@ export function VendorAnalytics() {
                       <div className="rounded-lg bg-slate-50 p-2"><p className="text-[10px] uppercase text-muted-foreground">Carrito</p><p className="font-black">{product.cartAdds}</p></div>
                       <div className="rounded-lg bg-slate-50 p-2"><p className="text-[10px] uppercase text-muted-foreground">Favoritos</p><p className="font-black">{product.currentFavorites}</p></div>
                     </div>
+                    <div className="mt-2 rounded-lg bg-sky-50 p-2 text-xs text-sky-800">
+                      <strong>{product.shares}</strong> compartidos · <strong>{product.sharedVisits}</strong> visitas desde enlaces
+                    </div>
                     <div className="mt-3 flex items-center justify-between text-xs">
                       <span>{product.orders} pedidos · {product.soldUnits} unidades</span>
                       <span className="font-bold text-indigo-700">{pct(product.conversionRate)} conversión</span>
@@ -318,6 +329,7 @@ export function VendorAnalytics() {
                       <th className="px-4 py-3 text-right">Vistas</th>
                       <th className="px-4 py-3 text-right">Carrito</th>
                       <th className="px-4 py-3 text-right">Favoritos</th>
+                      <th className="px-4 py-3 text-right">Compartidos</th>
                       <th className="px-4 py-3 text-right">Pedidos</th>
                       <th className="px-4 py-3 text-right">Conversión</th>
                       <th className="px-5 py-3 text-right">Ventas</th>
@@ -338,6 +350,10 @@ export function VendorAnalytics() {
                         <td className="px-4 py-4 text-right">
                           <p className="font-semibold">{product.currentFavorites}</p>
                           <p className="text-xs text-muted-foreground">{product.favoriteAdds} nuevos</p>
+                        </td>
+                        <td className="px-4 py-4 text-right">
+                          <p className="font-semibold">{product.shares}</p>
+                          <p className="text-xs text-muted-foreground">{product.sharedVisits} visitas</p>
                         </td>
                         <td className="px-4 py-4 text-right">
                           <p className="font-semibold">{product.orders}</p>
