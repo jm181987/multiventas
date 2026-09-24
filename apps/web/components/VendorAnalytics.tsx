@@ -137,7 +137,7 @@ export function VendorAnalytics() {
             Descubrí qué productos atraen atención, cuáles generan intención de compra y cuáles convierten en ventas.
           </p>
         </div>
-        <div className="inline-flex w-fit rounded-xl border bg-white p-1">
+        <div className="flex w-full flex-wrap rounded-xl border bg-white p-1 sm:w-fit">
           {([7, 30, 90] as const).map((value) => (
             <Button
               key={value}
@@ -273,10 +273,10 @@ export function VendorAnalytics() {
               <h2 className="text-xl font-black">Rendimiento por producto</h2>
               <p className="text-sm text-muted-foreground">Compará descubrimiento, intención y ventas producto por producto.</p>
             </div>
-            <label className="flex items-center gap-2 text-sm">
+            <label className="flex min-w-0 flex-col gap-2 text-sm sm:flex-row sm:items-center">
               <span className="text-muted-foreground">Ordenar por</span>
               <select
-                className="h-9 rounded-md border bg-white px-3 text-sm font-semibold"
+                className="h-9 w-full min-w-0 rounded-md border bg-white px-3 text-sm font-semibold sm:w-auto"
                 value={sort}
                 onChange={(event) => setSort(event.target.value as SortKey)}
               >
@@ -313,7 +313,7 @@ export function VendorAnalytics() {
                     <div className="mt-2 rounded-lg bg-sky-50 p-2 text-xs text-sky-800">
                       <strong>{product.shares}</strong> compartidos · <strong>{product.sharedVisits}</strong> visitas desde enlaces
                     </div>
-                    <div className="mt-3 flex items-center justify-between text-xs">
+                    <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-xs">
                       <span>{product.orders} pedidos · {product.soldUnits} unidades</span>
                       <span className="font-bold text-indigo-700">{pct(product.conversionRate)} conversión</span>
                     </div>
