@@ -87,7 +87,7 @@ export function AdminSupportCases() {
   );
 
   return (
-    <div className="space-y-6">
+    <div className="min-w-0 space-y-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <p className="text-sm font-semibold uppercase tracking-widest text-muted-foreground">Postventa</p>
@@ -138,9 +138,9 @@ export function AdminSupportCases() {
             <Card key={supportCase.id} className="overflow-hidden">
               <CardHeader className="border-b bg-slate-50/60">
                 <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-                  <div>
-                    <div className="flex flex-wrap items-center gap-2">
-                      <h2 className="text-lg font-black">{supportCase.subject}</h2>
+                  <div className="min-w-0">
+                    <div className="flex min-w-0 flex-wrap items-center gap-2">
+                      <h2 className="min-w-0 break-words text-lg font-black">{supportCase.subject}</h2>
                       <Badge className={statusClass[supportCase.status]}>{statusLabel[supportCase.status]}</Badge>
                     </div>
                     <p className="mt-1 text-xs text-muted-foreground">
@@ -168,7 +168,7 @@ export function AdminSupportCases() {
                       <div className="rounded-xl bg-slate-50 p-3 text-sm">
                         <div className="flex items-center gap-2 font-bold"><UserRound className="size-4" /> Solicitante</div>
                         <p className="mt-1">{supportCase.creator.name}</p>
-                        <p className="text-xs text-muted-foreground">{supportCase.creator.email}</p>
+                        <p className="break-all text-xs text-muted-foreground">{supportCase.creator.email}</p>
                       </div>
                       <div className="rounded-xl bg-slate-50 p-3 text-sm">
                         <div className="flex items-center gap-2 font-bold"><Store className="size-4" /> Tienda</div>
@@ -182,11 +182,11 @@ export function AdminSupportCases() {
                     <div className="rounded-xl border bg-white p-4 text-sm">
                       <p className="font-bold">Comprador</p>
                       <p className="mt-1">{supportCase.order.buyer.name}</p>
-                      <p className="text-xs text-muted-foreground">{supportCase.order.buyer.email}</p>
+                      <p className="break-all text-xs text-muted-foreground">{supportCase.order.buyer.email}</p>
 
                       <p className="mt-4 font-bold">Vendedor</p>
                       <p className="mt-1">{supportCase.order.vendor.user.name}</p>
-                      <p className="text-xs text-muted-foreground">{supportCase.order.vendor.user.email}</p>
+                      <p className="break-all text-xs text-muted-foreground">{supportCase.order.vendor.user.email}</p>
 
                       <div className="mt-4 flex items-center gap-2 text-xs text-muted-foreground">
                         <Clock3 className="size-3.5" />
@@ -208,7 +208,7 @@ export function AdminSupportCases() {
                     />
                   </label>
 
-                  <div className="mt-3 flex flex-wrap justify-end gap-2">
+                  <div className="mt-3 grid grid-cols-1 gap-2 sm:flex sm:flex-wrap sm:justify-end">
                     {supportCase.status !== 'IN_REVIEW' && (
                       <Button
                         type="button"
