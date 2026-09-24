@@ -14,6 +14,7 @@ export const dynamic = 'force-dynamic';
 type PublicStore = StoreType & {
   productCount?: number;
   completedSales?: number;
+  createdAt?: string;
   vendor?: { businessName?: string | null };
 };
 
@@ -147,7 +148,7 @@ export default async function StorePage({
             <div className="mt-3 flex flex-wrap items-center gap-4 text-sm text-white/80">
               <span>{store.productCount ?? products.total} productos publicados</span>
               {(store.completedSales ?? 0) > 0 && <span><strong className="text-white">{store.completedSales}</strong> ventas completadas</span>}
-              <span>En SeVende desde {new Date(store.createdAt).getFullYear()}</span>
+              {store.createdAt && <span>En SeVende desde {new Date(store.createdAt).getFullYear()}</span>}
               {reputation.count > 0 && (
                 <span className="inline-flex items-center gap-2 rounded-full bg-black/20 px-3 py-1 backdrop-blur">
                   <ReviewStars rating={reputation.average} />
