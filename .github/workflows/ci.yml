@@ -154,6 +154,9 @@ jobs:
           docker logs multiventas-api-smoke
           exit 1
 
+      - name: Install browser for responsive smoke
+        run: pnpm dlx @playwright/test@1.55.0 install --with-deps chromium
+
       - name: Web Docker smoke test
         shell: bash
         run: |
@@ -198,4 +201,86 @@ jobs:
           echo "Web Docker container did not become healthy within 30 seconds"
           docker logs multiventas-web-smoke
           exit 1
+
+      - name: Responsive browser smoke test
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          docker network create multiventas-responsive >/dev/null
+
+          cleanup_responsive() {
+            docker logs multiventas-responsive-web || true
+            docker logs multiventas-responsive-api || true
+            docker rm -f multiventas-responsive-web multiventas-responsive-api >/dev/null 2>&1 || true
+            docker network rm multiventas-responsive >/dev/null 2>&1 || true
+          }
+          trap cleanup_responsive EXIT
+
+          DATABASE_URL_DOCKER="${DATABASE_URL/localhost/host.docker.internal}"
+          DATABASE_URL_DOCKER="${DATABASE_URL_DOCKER/127.0.0.1/host.docker.internal}"
+          DIRECT_URL_DOCKER="${DIRECT_URL/localhost/host.docker.internal}"
+          DIRECT_URL_DOCKER="${DIRECT_URL_DOCKER/127.0.0.1/host.docker.internal}"
+          REDIS_URL_DOCKER="${REDIS_URL/localhost/host.docker.internal}"
+          REDIS_URL_DOCKER="${REDIS_URL_DOCKER/127.0.0.1/host.docker.internal}"
+
+          docker run -d --name multiventas-responsive-api \
+            --network multiventas-responsive \
+            --network-alias api \
+            --add-host host.docker.internal:host-gateway \
+            -e NODE_ENV=production \
+            -e API_PORT=80 \
+            -e DATABASE_URL="$DATABASE_URL_DOCKER" \
+            -e DIRECT_URL="$DIRECT_URL_DOCKER" \
+            -e REDIS_URL="$REDIS_URL_DOCKER" \
+            -e JWT_ACCESS_SECRET="$JWT_ACCESS_SECRET" \
+            -e JWT_REFRESH_SECRET="$JWT_REFRESH_SECRET" \
+            -e JWT_ACCESS_TTL=15m \
+            -e JWT_REFRESH_TTL=30d \
+            -e TOKEN_ENCRYPTION_KEY="$TOKEN_ENCRYPTION_KEY" \
+            -e MP_CLIENT_ID="$MP_CLIENT_ID" \
+            -e MP_CLIENT_SECRET="$MP_CLIENT_SECRET" \
+            -e MP_REDIRECT_URI="$MP_REDIRECT_URI" \
+            -e MP_WEBHOOK_SECRET="$MP_WEBHOOK_SECRET" \
+            -e MP_WEBHOOK_URL="$MP_WEBHOOK_URL" \
+            -e MP_MARKETPLACE_FEE_RATE=0.08 \
+            -e WEB_PUBLIC_URL="$WEB_PUBLIC_URL" \
+            -e API_PUBLIC_URL="$API_PUBLIC_URL" \
+            -e S3_ENDPOINT="$S3_ENDPOINT" \
+            -e S3_REGION="$S3_REGION" \
+            -e S3_BUCKET="$S3_BUCKET" \
+            -e S3_ACCESS_KEY="$S3_ACCESS_KEY" \
+            -e S3_SECRET_KEY="$S3_SECRET_KEY" \
+            -e S3_FORCE_PATH_STYLE="$S3_FORCE_PATH_STYLE" \
+            -e S3_PUBLIC_URL="$S3_PUBLIC_URL" \
+            multiventas-api-smoke
+
+          for attempt in $(seq 1 30); do
+            if docker run --rm --network multiventas-responsive curlimages/curl:8.12.1 --fail --silent http://api/api/health >/tmp/responsive-api-health.json 2>/dev/null; then
+              break
+            fi
+            sleep 1
+          done
+          test -s /tmp/responsive-api-health.json
+
+          docker run -d --name multiventas-responsive-web \
+            --network multiventas-responsive \
+            -p 8081:80 \
+            -e NODE_ENV=production \
+            -e PORT=80 \
+            -e HOSTNAME=0.0.0.0 \
+            multiventas-web-smoke
+
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent http://127.0.0.1:8081/ >/tmp/responsive-web-home.html; then
+              break
+            fi
+            sleep 1
+          done
+          test -s /tmp/responsive-web-home.html
+
+          BASE_URL=http://127.0.0.1:8081 \
+            SEED_VENDOR_PASSWORD="$SEED_VENDOR_PASSWORD" \
+            SEED_ADMIN_PASSWORD="$SEED_ADMIN_PASSWORD" \
+            pnpm dlx @playwright/test@1.55.0 test apps/web/tests/responsive.spec.ts --reporter=line
 
