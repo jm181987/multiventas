@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512" role="img" aria-label="SeVende">
+  <defs>
+    <linearGradient id="g" x1="64" y1="54" x2="448" y2="458" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#6366F1"/>
+      <stop offset="1" stop-color="#22D3EE"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="112" fill="#020617"/>
+  <rect x="46" y="46" width="420" height="420" rx="92" fill="none" stroke="url(#g)" stroke-width="12"/>
+  <path d="M144 176c0-38 32-67 75-67h128v54H224c-16 0-27 8-27 19 0 13 12 19 30 24l58 14c57 14 84 43 84 90 0 56-45 93-115 93H139v-56h120c29 0 46-10 46-27 0-13-14-22-40-28l-52-13c-46-11-69-43-69-103Z" fill="url(#g)"/>
+</svg>
