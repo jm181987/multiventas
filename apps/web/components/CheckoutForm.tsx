@@ -90,6 +90,14 @@ export function CheckoutForm() {
   const [preview, setPreview] = useState<CheckoutPreview>();
   const [checkingPreview, setCheckingPreview] = useState(true);
   const [deliverySelections, setDeliverySelections] = useState<Record<string, string>>({});
+  const [savedAddress, setSavedAddress] = useState({ address: '', city: '', department: '', postalCode: '' });
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem('sv-checkout-address');
+      if (raw) setSavedAddress((current) => ({ ...current, ...JSON.parse(raw) }));
+    } catch {}
+  }, []);
 
   useEffect(() => {
     let attempts = 0;
@@ -153,7 +161,10 @@ export function CheckoutForm() {
   }
 
   useEffect(() => {
-    void refreshPreview('', {}, true);
+    let remembered: Record<string, string> = {};
+    try { remembered = JSON.parse(localStorage.getItem('sv-checkout-delivery') || '{}'); } catch {}
+    setDeliverySelections(remembered);
+    void refreshPreview('', remembered, Object.keys(remembered).length === 0);
   }, []);
 
   async function applyCoupon() {
@@ -179,6 +190,11 @@ export function CheckoutForm() {
         department: form.get('department'),
         postalCode: form.get('postalCode'),
       } : undefined;
+
+      if (shippingAddress) {
+        try { localStorage.setItem('sv-checkout-address', JSON.stringify(shippingAddress)); } catch {}
+      }
+      try { localStorage.setItem('sv-checkout-delivery', JSON.stringify(deliverySelections)); } catch {}
 
       const data = await authApi<CheckoutResult>('/orders/checkout', {
         method: 'POST',
@@ -293,12 +309,12 @@ export function CheckoutForm() {
             <p className="text-sm text-muted-foreground">Solo se solicita porque elegiste envío para al menos un producto.</p>
           </CardHeader>
           <CardContent className="grid gap-4 pt-5">
-            <Input name="address" placeholder="Dirección" required />
+            <Input name="address" placeholder="Dirección" defaultValue={savedAddress.address} required />
             <div className="grid gap-4 sm:grid-cols-2">
-              <Input name="city" placeholder="Ciudad" required />
-              <Input name="department" placeholder="Departamento" required />
+              <Input name="city" placeholder="Ciudad" defaultValue={savedAddress.city} required />
+              <Input name="department" placeholder="Departamento" defaultValue={savedAddress.department} required />
             </div>
-            <Input name="postalCode" placeholder="Código postal" />
+            <Input name="postalCode" placeholder="Código postal" defaultValue={savedAddress.postalCode} />
           </CardContent>
         </Card>
       )}
@@ -361,9 +377,12 @@ export function CheckoutForm() {
         </p>
       )}
 
-      <Button size="lg" disabled={loading || checkingPreview || !preview || preview.requiresDeliverySelection}>
-        {loading ? 'Preparando pago…' : 'Pagar con Mercado Pago'}
-      </Button>
+      <div className="sticky bottom-[max(0.75rem,env(safe-area-inset-bottom))] z-20 rounded-2xl border bg-background/95 p-3 shadow-xl backdrop-blur">
+        {preview && <div className="mb-2 flex items-center justify-between text-sm"><span className="text-muted-foreground">Total a pagar</span><strong className="text-lg">{money(preview.total, 'UYU')}</strong></div>}
+        <Button className="w-full" size="lg" disabled={loading || checkingPreview || !preview || preview.requiresDeliverySelection}>
+          {loading ? 'Preparando pago…' : 'Pagar con Mercado Pago'}
+        </Button>
+      </div>
     </form>
   );
 }
