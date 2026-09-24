@@ -251,6 +251,47 @@ notify_order_id=$(psql "$DIRECT_URL" -v ON_ERROR_STOP=1 -Atc "INSERT INTO orders
 [ -n "$notify_order_id" ] || fail "notification order seed missing"
 psql "$DIRECT_URL" -v ON_ERROR_STOP=1 -c "INSERT INTO order_items (tenant_id, order_id, product_id, title, sku, quantity, unit_price, total, delivery_method, delivery_amount, delivery_details, created_at) VALUES ('$vendor_id', '$notify_order_id', '$vendor_product_id', 'CI Product Updated', 'CI-001', 1, 1299, 1299, 'PICKUP', 0, 'Retiro CI 123', CURRENT_TIMESTAMP);" >/dev/null
 
+buyer_message=$(request POST "/order-conversations/$notify_order_id/messages" "$buyer_access" '{"message":"Hola vendedor CI"}') || fail "buyer order message"
+echo "$buyer_message" | jq -e '.senderRole == "BUYER" and .message == "Hola vendedor CI"' >/dev/null || fail "buyer message invalid"
+
+vendor_conversation=$(request GET "/order-conversations/$notify_order_id" "$vendor_access") || fail "vendor conversation read"
+echo "$vendor_conversation" | jq -e '.role == "VENDOR" and .unreadBeforeOpen == 1 and any(.messages[]; .senderRole == "BUYER" and .message == "Hola vendedor CI")' >/dev/null || fail "vendor conversation missing buyer message"
+
+vendor_unread=$(request GET /order-conversations/unread "$vendor_access") || fail "vendor unread conversations"
+echo "$vendor_unread" | jq -e --arg id "$notify_order_id" '(.byOrder[$id] // 0) == 0' >/dev/null || fail "vendor message was not marked read"
+
+vendor_message=$(request POST "/order-conversations/$notify_order_id/messages" "$vendor_access" '{"message":"Tu pedido está listo para coordinar."}') || fail "vendor order message"
+echo "$vendor_message" | jq -e '.senderRole == "VENDOR"' >/dev/null || fail "vendor message invalid"
+
+buyer_conversation=$(request GET "/order-conversations/$notify_order_id" "$buyer_access") || fail "buyer conversation read"
+echo "$buyer_conversation" | jq -e '.role == "BUYER" and .unreadBeforeOpen == 1 and (.messages|length) == 2 and any(.messages[]; .senderRole == "VENDOR")' >/dev/null || fail "buyer conversation missing vendor reply"
+
+admin_conversation_status=$(curl --silent --show-error -o /tmp/admin-conversation.json -w '%{http_code}'   -H "authorization: Bearer $admin_access"   "$BASE_URL/order-conversations/$notify_order_id") || fail "admin conversation access request"
+[ "$admin_conversation_status" = "403" ] || fail "non-participant admin accessed private order conversation"
+
+support_case=$(request POST "/order-conversations/$notify_order_id/support" "$buyer_access" '{"subject":"Necesito ayuda CI","description":"Quiero ayuda para coordinar este pedido."}') || fail "buyer support case create"
+support_case_id=$(echo "$support_case" | jq -r '.id // empty')
+[ -n "$support_case_id" ] || fail "support case id missing"
+echo "$support_case" | jq -e '.status == "OPEN"' >/dev/null || fail "support case should start open"
+
+duplicate_support_status=$(curl --silent --show-error -o /tmp/duplicate-support.json -w '%{http_code}'   -X POST "$BASE_URL/order-conversations/$notify_order_id/support"   -H "authorization: Bearer $buyer_access"   -H 'content-type: application/json'   --data '{"subject":"Duplicado","description":"No debería abrir otro caso activo."}') || fail "duplicate support request"
+[ "$duplicate_support_status" = "400" ] || fail "duplicate active support case was not rejected"
+
+admin_support=$(request GET '/admin/support-cases?status=OPEN' "$admin_access") || fail "admin support cases"
+echo "$admin_support" | jq -e --arg id "$support_case_id" 'any(.[]; .id == $id and .order.id != null)' >/dev/null || fail "support case missing from admin"
+
+request PATCH "/admin/support-cases/$support_case_id" "$admin_access" '{"status":"IN_REVIEW","adminNote":"Estamos revisando el caso CI."}' >/tmp/support-review.json || fail "admin support review"
+jq -e '.status == "IN_REVIEW" and .adminNote == "Estamos revisando el caso CI."' /tmp/support-review.json >/dev/null || fail "support review update invalid"
+
+buyer_conversation=$(request GET "/order-conversations/$notify_order_id" "$buyer_access") || fail "buyer conversation with support"
+echo "$buyer_conversation" | jq -e --arg id "$support_case_id" 'any(.supportCases[]; .id == $id and .status == "IN_REVIEW" and .adminNote == "Estamos revisando el caso CI.")' >/dev/null || fail "support update not visible to buyer"
+
+buyer_support_notifications=$(request GET /notifications "$buyer_access") || fail "buyer support notifications"
+echo "$buyer_support_notifications" | jq -e 'any(.items[]; .type == "MESSAGE_RECEIVED") and any(.items[]; .type == "SUPPORT_CASE_UPDATED")' >/dev/null || fail "message/support notifications missing"
+
+request PATCH "/admin/support-cases/$support_case_id" "$admin_access" '{"status":"RESOLVED","adminNote":"Caso resuelto CI."}' >/tmp/support-resolved.json || fail "admin support resolve"
+jq -e '.status == "RESOLVED" and .resolvedAt != null' /tmp/support-resolved.json >/dev/null || fail "support case not resolved"
+
 request PATCH "/vendor/orders/$notify_order_id/status" "$vendor_access" '{"status":"SHIPPED"}' >/tmp/notify-order-shipped.json || fail "order shipped notification transition"
 request PATCH "/vendor/orders/$notify_order_id/status" "$vendor_access" '{"status":"DELIVERED"}' >/tmp/notify-order-delivered.json || fail "order delivered notification transition"
 
@@ -324,4 +365,4 @@ echo "$store_reputation" | jq -e '.average == 5 and .count >= 1' >/dev/null || f
 
 request DELETE "/vendor/products/$vendor_product_id/images/$vendor_image_id" "$vendor_access" >/tmp/vendor-product-image-delete.json || fail "vendor product image delete"
 
-echo "Functional smoke passed: database, auth, catalog, commerce analytics, favorites, reorder, cart retention, delivery methods, notifications, vendor dashboard, promotions, verified reviews, tenant isolation and admin flows."
+echo "Functional smoke passed: database, auth, catalog, commerce analytics, favorites, reorder, cart retention, delivery methods, notifications, private order messaging, support cases, vendor dashboard, promotions, verified reviews, tenant isolation and admin flows."
