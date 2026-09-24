@@ -40,10 +40,10 @@ export function SiteHeader() {
 
   return (
     <>
-      <header className={`sticky top-0 z-40 border-b backdrop-blur-xl ${headerClass}`}>
-        <div className="mx-auto flex h-16 max-w-7xl items-center gap-3 px-4">
+      <header className={`safe-area-top sticky top-0 z-40 border-b backdrop-blur-xl ${headerClass}`}>
+        <div className="mx-auto flex h-16 max-w-7xl min-w-0 items-center gap-1.5 px-3 sm:gap-3 sm:px-4">
           <Link href="/" className="flex items-center gap-2 font-black tracking-tight" onClick={() => setMobileOpen(false)} aria-label="SeVende - Inicio">
-            <img src="/knj-logo.webp" alt="KNJ" className="h-11 w-auto object-contain" />
+            <img src="/knj-logo.webp" alt="KNJ" className="h-9 w-auto max-w-[92px] object-contain sm:h-11 sm:max-w-none" />
             <span className="hidden text-lg sm:inline">SeVende</span>
           </Link>
 
@@ -63,6 +63,15 @@ export function SiteHeader() {
             />
           </div>
 
+          <InstallAppButton
+            compact
+            className={`grid size-9 shrink-0 place-items-center rounded-md border transition lg:hidden ${
+              premiumHome
+                ? 'border-white/[.12] bg-white/[.04] text-white hover:bg-white/[.08]'
+                : 'bg-white hover:bg-muted'
+            }`}
+          />
+
           <NotificationBell dark={premiumHome} />
 
           <Button
@@ -70,9 +79,9 @@ export function SiteHeader() {
             size="sm"
             onClick={toggle}
             aria-label="Abrir carrito"
-            className={premiumHome ? 'border-white/[.12] bg-white/[.04] text-white hover:bg-white/[.08]' : undefined}
+            className={`shrink-0 ${premiumHome ? 'border-white/[.12] bg-white/[.04] text-white hover:bg-white/[.08]' : ''}`}
           >
-            <ShoppingBag className="mr-2 size-4" /> <span className="hidden sm:inline">Carrito</span>
+            <ShoppingBag className="size-4 sm:mr-2" /> <span className="hidden sm:inline">Carrito</span>
           </Button>
 
           {!loading && !user && (
