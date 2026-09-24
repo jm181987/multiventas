@@ -36,16 +36,16 @@ export function DashboardShell({ kind, children }: { kind: 'vendor' | 'admin'; c
 
   return (
     <div className="mx-auto grid max-w-7xl gap-6 px-4 py-6 lg:grid-cols-[220px_1fr] lg:gap-8 lg:py-8">
-      <aside className="h-fit overflow-x-auto rounded-xl border bg-white p-3 lg:sticky lg:top-24">
+      <aside className="h-fit min-w-0 rounded-xl border bg-white p-3 lg:sticky lg:top-24">
         <p className="px-3 py-2 text-xs font-bold uppercase tracking-widest text-muted-foreground">
           {kind === 'vendor' ? 'Mi tienda' : 'Administración'}
         </p>
-        <nav className="flex gap-1 lg:flex-col">
+        <nav className="flex flex-wrap gap-1 lg:flex-col">
           {links.map(([href,label]) => (
             <Link
               key={href}
               href={href}
-              className={`whitespace-nowrap rounded-lg px-3 py-2 text-sm hover:bg-muted ${pathname === href ? 'bg-muted font-semibold' : ''}`}
+              className={`max-w-full rounded-lg px-3 py-2 text-sm leading-5 hover:bg-muted ${pathname === href ? 'bg-muted font-semibold' : ''}`}
             >
               {label}
             </Link>
