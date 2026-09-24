@@ -24,12 +24,23 @@ class CategoryUpdateDto {
 @Injectable()
 class CategoriesService {
   constructor(private readonly db: DbService) {}
-  tree() {
-    return this.db.client.category.findMany({
-      where: { parentId: null, isActive: true },
-      include: { children: { where: { isActive: true }, orderBy: { sortOrder: 'asc' } } },
-      orderBy: { sortOrder: 'asc' },
+  async tree() {
+    const categories = await this.db.client.category.findMany({
+      where: { isActive: true },
+      orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }],
     });
+    const byParent = new Map<string | null, typeof categories>();
+    for (const category of categories) {
+      const siblings = byParent.get(category.parentId) ?? [];
+      siblings.push(category);
+      byParent.set(category.parentId, siblings);
+    }
+    const build = (parentId: string | null): any[] =>
+      (byParent.get(parentId) ?? []).map((category) => ({
+        ...category,
+        children: build(category.id),
+      }));
+    return build(null);
   }
   create(dto: CategoryDto) { return this.db.client.category.create({ data: dto }); }
   update(id: string, dto: CategoryUpdateDto) { return this.db.client.category.update({ where: { id }, data: dto }); }
