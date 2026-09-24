@@ -5,8 +5,11 @@ export default function manifest(): MetadataRoute.Manifest {
     name: 'SeVende | Marketplace de KNJ',
     short_name: 'SeVende',
     description: 'Comprá y vendé en tiendas independientes de Uruguay desde una experiencia moderna y segura.',
+    id: '/',
     start_url: '/',
+    scope: '/',
     display: 'standalone',
+    display_override: ['window-controls-overlay', 'standalone', 'minimal-ui'],
     background_color: '#020617',
     theme_color: '#111827',
     lang: 'es-UY',
@@ -14,21 +17,35 @@ export default function manifest(): MetadataRoute.Manifest {
     categories: ['shopping', 'business', 'lifestyle'],
     icons: [
       {
-        src: '/knj-logo.webp',
-        sizes: '512x512',
-        type: 'image/webp',
+        src: '/pwa-icon-192.svg',
+        sizes: '192x192',
+        type: 'image/svg+xml',
         purpose: 'any',
       },
       {
-        src: '/knj-logo.webp',
+        src: '/pwa-icon-512.svg',
         sizes: '512x512',
-        type: 'image/webp',
-        purpose: 'maskable',
+        type: 'image/svg+xml',
+        purpose: 'any maskable',
       },
       {
         src: '/favicon.ico',
         sizes: 'any',
         type: 'image/x-icon',
+      },
+    ],
+    shortcuts: [
+      {
+        name: 'Explorar productos',
+        short_name: 'Productos',
+        url: '/productos',
+        icons: [{ src: '/pwa-icon-192.svg', sizes: '192x192', type: 'image/svg+xml' }],
+      },
+      {
+        name: 'Ver tiendas',
+        short_name: 'Tiendas',
+        url: '/tiendas',
+        icons: [{ src: '/pwa-icon-192.svg', sizes: '192x192', type: 'image/svg+xml' }],
       },
     ],
   };
