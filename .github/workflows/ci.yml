@@ -173,6 +173,12 @@ jobs:
               grep -q "SeVende" /tmp/web-home.html
               curl --fail --silent http://127.0.0.1:8080/manifest.webmanifest >/tmp/web-manifest.json
               grep -q "SeVende" /tmp/web-manifest.json
+              grep -q "pwa-icon-192.svg" /tmp/web-manifest.json
+              grep -q "pwa-icon-512.svg" /tmp/web-manifest.json
+              curl --fail --silent http://127.0.0.1:8080/pwa-icon-192.svg >/tmp/pwa-icon-192.svg
+              grep -q "<svg" /tmp/pwa-icon-192.svg
+              curl --fail --silent http://127.0.0.1:8080/pwa-icon-512.svg >/tmp/pwa-icon-512.svg
+              grep -q "<svg" /tmp/pwa-icon-512.svg
               curl --fail --silent http://127.0.0.1:8080/sw.js >/tmp/web-sw.js
               grep -q "sevende-static" /tmp/web-sw.js
               curl --fail --silent http://127.0.0.1:8080/robots.txt >/tmp/web-robots.txt
