@@ -89,7 +89,7 @@ export function ShareButton({
       </Button>
 
       {open && (
-        <div className="absolute right-0 top-11 z-50 w-56 overflow-hidden rounded-xl border bg-white p-1.5 text-sm text-slate-900 shadow-2xl">
+        <div className="fixed inset-x-3 bottom-3 z-[80] max-h-[70vh] overflow-y-auto rounded-2xl border bg-white p-2 text-sm text-slate-900 shadow-2xl sm:absolute sm:inset-x-auto sm:bottom-auto sm:right-0 sm:top-11 sm:w-56 sm:max-h-none sm:overflow-hidden sm:rounded-xl">
           <button type="button" onClick={() => void native()} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left font-semibold hover:bg-slate-50">
             <Send className="size-4 text-indigo-600" /> Compartir en apps
           </button>
