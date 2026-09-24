@@ -1,3 +1,4 @@
+import type { Metadata } from 'next';
 import Link from 'next/link';
 import { Search, Store as StoreIcon } from 'lucide-react';
 import { publicApi } from '@/lib/api';
@@ -5,6 +6,18 @@ import { StoreSearch } from '@/lib/types';
 import { StoreCard } from '@/components/StoreCard';
 
 export const dynamic = 'force-dynamic';
+
+export const metadata: Metadata = {
+  title: 'Tiendas',
+  description: 'Descubrí tiendas independientes y sus catálogos dentro de SeVende, el marketplace multi-vendedor de KNJ.',
+  alternates: { canonical: '/tiendas' },
+  openGraph: {
+    type: 'website',
+    url: '/tiendas',
+    title: 'Tiendas | SeVende',
+    description: 'Descubrí vendedores y tiendas independientes dentro de SeVende.',
+  },
+};
 
 function pageHref(page: number, q?: string) {
   const params = new URLSearchParams();
