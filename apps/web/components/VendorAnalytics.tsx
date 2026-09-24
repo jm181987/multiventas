@@ -116,6 +116,9 @@ export function VendorAnalytics() {
 
   const data = query.data;
   const maxTrend = Math.max(...data.trend.map((point) => Math.max(point.views, point.cartAdds)), 1);
+  const mobileStep = Math.max(1, Math.ceil(data.trend.length / 12));
+  const mobileTrend = data.trend.filter((_, index) => index % mobileStep === 0 || index === data.trend.length - 1);
+  const mobileMaxTrend = Math.max(...mobileTrend.map((point) => Math.max(point.views, point.cartAdds)), 1);
   const funnelMax = Math.max(data.summary.views, data.summary.cartAdds, data.summary.orders, 1);
 
   const metricCards = [
@@ -157,7 +160,7 @@ export function VendorAnalytics() {
           <Card key={label}>
             <CardContent className="p-5">
               <div className="flex items-start justify-between gap-3">
-                <div>
+                <div className="min-w-0">
                   <p className="text-sm text-muted-foreground">{label}</p>
                   <p className="mt-2 text-2xl font-black tracking-tight">{value}</p>
                   <p className="mt-1 text-xs text-muted-foreground">{detail}</p>
@@ -183,7 +186,28 @@ export function VendorAnalytics() {
             </div>
           </CardHeader>
           <CardContent className="pt-6">
-            <div className="overflow-x-auto pb-2">
+            <div className="sm:hidden">
+              <div className="flex h-44 min-w-0 items-end gap-1">
+                {mobileTrend.map((point) => {
+                  const viewHeight = point.views ? Math.max(6, (point.views / mobileMaxTrend) * 100) : 2;
+                  const cartHeight = point.cartAdds ? Math.max(6, (point.cartAdds / mobileMaxTrend) * 100) : 0;
+                  return (
+                    <div key={point.date} className="flex h-full min-w-0 flex-1 flex-col justify-end">
+                      <div className="flex flex-1 items-end justify-center gap-px">
+                        <div className="w-1/2 rounded-t bg-indigo-500/80" style={{ height: viewHeight + '%' }} />
+                        <div className="w-1/2 rounded-t bg-cyan-400/90" style={{ height: cartHeight + '%' }} />
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+              <div className="mt-2 flex items-center justify-between text-[10px] text-muted-foreground">
+                <span>{data.from.slice(5).split('-').reverse().join('/')}</span>
+                <span>{data.to.slice(5).split('-').reverse().join('/')}</span>
+              </div>
+            </div>
+
+            <div className="hidden overflow-x-auto pb-2 scrollbar-safe sm:block">
               <div className="flex h-56 min-w-[720px] items-end gap-1.5">
                 {data.trend.map((point) => {
                   const viewHeight = point.views ? Math.max(5, (point.views / maxTrend) * 100) : 2;
@@ -191,14 +215,8 @@ export function VendorAnalytics() {
                   return (
                     <div key={point.date} className="group flex h-full min-w-3 flex-1 flex-col justify-end">
                       <div className="relative flex flex-1 items-end justify-center gap-px">
-                        <div
-                          className="w-1/2 rounded-t bg-indigo-500/80"
-                          style={{ height: viewHeight + '%' }}
-                        />
-                        <div
-                          className="w-1/2 rounded-t bg-cyan-400/90"
-                          style={{ height: cartHeight + '%' }}
-                        />
+                        <div className="w-1/2 rounded-t bg-indigo-500/80" style={{ height: viewHeight + '%' }} />
+                        <div className="w-1/2 rounded-t bg-cyan-400/90" style={{ height: cartHeight + '%' }} />
                         {(point.views > 0 || point.cartAdds > 0 || point.orders > 0) && (
                           <div className="absolute -top-16 left-1/2 z-10 hidden -translate-x-1/2 whitespace-nowrap rounded-lg bg-slate-950 px-2.5 py-2 text-[10px] leading-4 text-white shadow-xl group-hover:block">
                             <div>{point.views} vistas</div>
