@@ -155,7 +155,9 @@ jobs:
           exit 1
 
       - name: Install browser for responsive smoke
-        run: pnpm dlx @playwright/test@1.55.0 install --with-deps chromium
+        run: |
+          pnpm --dir apps/web add --save-dev --lockfile=false @playwright/test@1.55.0
+          pnpm --dir apps/web exec playwright install --with-deps chromium
 
       - name: Web Docker smoke test
         shell: bash
@@ -282,5 +284,5 @@ jobs:
           BASE_URL=http://127.0.0.1:8081 \
             SEED_VENDOR_PASSWORD="$SEED_VENDOR_PASSWORD" \
             SEED_ADMIN_PASSWORD="$SEED_ADMIN_PASSWORD" \
-            pnpm dlx @playwright/test@1.55.0 test apps/web/tests/responsive.spec.mjs --reporter=line
+            pnpm --dir apps/web exec playwright test tests/responsive.spec.mjs --reporter=line
 
