@@ -107,6 +107,16 @@ enum NotificationType {
   REVIEW_PUBLISHED
   STOCK_LOW
   CART_ABANDONED
+  MESSAGE_RECEIVED
+  SUPPORT_CASE_CREATED
+  SUPPORT_CASE_UPDATED
+}
+
+enum SupportCaseStatus {
+  OPEN
+  IN_REVIEW
+  RESOLVED
+  CLOSED
 }
 
 model User {
@@ -125,6 +135,8 @@ model User {
   auditLogs    AuditLog[]   @relation("AuditActor")
   notifications Notification[]
   favorites     Favorite[]
+  sentOrderMessages OrderMessage[]
+  supportCasesCreated SupportCase[] @relation("SupportCaseCreator")
   createdAt    DateTime     @default(now()) @map("created_at")
   updatedAt    DateTime     @updatedAt @map("updated_at")
   deletedAt    DateTime?    @map("deleted_at")
@@ -284,6 +296,8 @@ model Order {
   payment        Payment?
   commission     Commission?
   promotion      Promotion?  @relation(fields: [promotionId], references: [id], onDelete: SetNull)
+  messages       OrderMessage[]
+  supportCases   SupportCase[]
 
   @@index([tenantId, status, createdAt])
   @@index([promotionId])
@@ -312,6 +326,45 @@ model OrderItem {
   @@index([tenantId, orderId])
   @@index([productId])
   @@map("order_items")
+}
+
+model OrderMessage {
+  id           String   @id @default(uuid()) @db.Uuid
+  tenantId     String   @map("tenant_id") @db.Uuid
+  orderId      String   @map("order_id") @db.Uuid
+  senderUserId String   @map("sender_user_id") @db.Uuid
+  senderRole   UserRole @map("sender_role")
+  message      String
+  readAt       DateTime? @map("read_at")
+  createdAt    DateTime @default(now()) @map("created_at")
+  order        Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  sender       User     @relation(fields: [senderUserId], references: [id], onDelete: Restrict)
+
+  @@index([tenantId, orderId, createdAt])
+  @@index([orderId, readAt, createdAt])
+  @@index([senderUserId, createdAt])
+  @@map("order_messages")
+}
+
+model SupportCase {
+  id              String            @id @default(uuid()) @db.Uuid
+  tenantId        String            @map("tenant_id") @db.Uuid
+  orderId         String            @map("order_id") @db.Uuid
+  createdByUserId String            @map("created_by_user_id") @db.Uuid
+  status          SupportCaseStatus @default(OPEN)
+  subject         String            @db.VarChar(180)
+  description     String
+  adminNote       String?           @map("admin_note")
+  createdAt       DateTime          @default(now()) @map("created_at")
+  updatedAt       DateTime          @updatedAt @map("updated_at")
+  resolvedAt      DateTime?         @map("resolved_at")
+  order           Order             @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  creator         User              @relation("SupportCaseCreator", fields: [createdByUserId], references: [id], onDelete: Restrict)
+
+  @@index([tenantId, status, createdAt])
+  @@index([orderId, createdAt])
+  @@index([createdByUserId, status, createdAt])
+  @@map("support_cases")
 }
 
 model Payment {
