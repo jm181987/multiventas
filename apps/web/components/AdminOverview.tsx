@@ -21,6 +21,7 @@ type Dashboard = {
   orders: number;
   grossSales: string | number;
   platformCommissions: string | number;
+  commercialOpportunities: Array<{ id: string; title: string; storeName: string; stock: number; views: number; cartAdds: number; favoriteAdds: number; orders: number; soldUnits: number; conversionRate: number }>;
   recentVendors: Array<{
     id: string;
     businessName: string;
@@ -77,6 +78,38 @@ export function AdminOverview() {
           </Card>
         ))}
       </div>
+
+      <Card>
+        <CardHeader className="border-b">
+          <div>
+            <h2 className="text-xl font-bold">Oportunidades de conversión</h2>
+            <p className="text-sm text-muted-foreground">Productos con interés real en los últimos 30 días que todavía convierten poco.</p>
+          </div>
+        </CardHeader>
+        <CardContent className="p-0">
+          <div className="divide-y">
+            {data.commercialOpportunities.map((product) => (
+              <div key={product.id} className="grid gap-3 p-4 sm:grid-cols-[1fr_auto] sm:items-center">
+                <div className="min-w-0">
+                  <p className="truncate font-semibold">{product.title}</p>
+                  <p className="text-sm text-muted-foreground">{product.storeName} · {product.stock} en stock</p>
+                </div>
+                <div className="flex flex-wrap gap-2 text-xs">
+                  <Badge variant="secondary">{product.views} vistas</Badge>
+                  <Badge variant="secondary">{product.cartAdds} carritos</Badge>
+                  <Badge variant="secondary">{product.orders} ventas</Badge>
+                  <Badge className={product.conversionRate < 1 ? 'bg-amber-100 text-amber-800' : 'bg-sky-100 text-sky-800'}>
+                    {product.conversionRate}% conversión
+                  </Badge>
+                </div>
+              </div>
+            ))}
+            {!data.commercialOpportunities.length && (
+              <p className="p-6 text-sm text-muted-foreground">No hay oportunidades críticas detectadas en los últimos 30 días.</p>
+            )}
+          </div>
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader className="flex flex-row items-center justify-between border-b">
