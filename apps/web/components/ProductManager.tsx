@@ -163,7 +163,7 @@ export function ProductManager() {
   const qc = useQueryClient();
   const products = useQuery({ queryKey: ['vendor-products'], queryFn: () => authApi<VendorProduct[]>('/vendor/products') });
   const stores = useQuery({ queryKey: ['vendor-stores'], queryFn: () => authApi<Store[]>('/vendor/stores') });
-  const categories = useQuery({ queryKey: ['categories'], queryFn: () => publicApi<CategoryNode[]>('/categories') });
+  const categories = useQuery({ queryKey: ['categories'], queryFn: () => publicApi<CategoryNode[]>('/categories'), staleTime: 0 });
 
   const [editingId, setEditingId] = useState<string | 'new' | null>(null);
   const [form, setForm] = useState<FormState>(emptyForm);
@@ -347,9 +347,12 @@ export function ProductManager() {
                   </select>
                 </label>
                 <label className="space-y-1 text-sm font-medium">Categoría
-                  <select className="h-10 w-full rounded-md border bg-background px-3 text-sm" value={form.categoryId} onChange={(e) => setForm({ ...form, categoryId: e.target.value })}>
-                    <option value="">Sin categoría</option>{categoryOptions.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}
+                  <select className="h-10 w-full rounded-md border bg-background px-3 text-sm" value={form.categoryId} onChange={(e) => setForm((current) => ({ ...current, categoryId: e.target.value }))} disabled={categories.isLoading}>
+                    <option value="">{categories.isLoading ? 'Cargando categorías…' : 'Sin categoría'}</option>
+                    {categoryOptions.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}
                   </select>
+                  {categories.error && <span className="block text-xs text-red-600">No se pudieron cargar las categorías. Recargá la página.</span>}
+                  {!categories.isLoading && !categories.error && categoryOptions.length === 0 && <span className="block text-xs text-amber-700">Todavía no hay categorías activas creadas por el administrador.</span>}
                 </label>
                 <label className="space-y-1 text-sm font-medium">Estado
                   <select className="h-10 w-full rounded-md border bg-background px-3 text-sm" value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value as ProductStatus })}>
@@ -423,7 +426,7 @@ export function ProductManager() {
                   <div className="size-16 overflow-hidden rounded-lg border bg-muted">{product.images?.[0] ? <img src={product.images[0].url} alt={product.title} className="h-full w-full object-cover" /> : <div className="grid h-full place-items-center text-xs text-muted-foreground">Sin foto</div>}</div>
                   <div className="min-w-0">
                     <div className="flex flex-wrap items-center gap-2"><p className="truncate font-bold">{product.title}</p><Badge>{statusLabel(product.status)}</Badge>{product.stock === 0 && <Badge>Sin stock</Badge>}</div>
-                    <p className="mt-1 text-sm text-muted-foreground">{product.store?.name} · {product.sku || 'Sin SKU'} · Stock {product.stock}</p>
+                    <p className="mt-1 text-sm text-muted-foreground">{product.store?.name} · {product.category?.name || 'Sin categoría'} · {product.sku || 'Sin SKU'} · Stock {product.stock}</p>
                     <p className="mt-1 font-black">{money(Number(product.price), product.currency)}</p>
                   </div>
                   <div className="flex flex-wrap gap-2 sm:justify-end">
