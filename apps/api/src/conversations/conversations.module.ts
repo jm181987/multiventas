@@ -53,7 +53,7 @@ class AdminSupportQueryDto {
 
 type ParticipantContext = {
   order: any;
-  role: UserRole.BUYER | UserRole.VENDOR;
+  role: UserRole;
   recipientUserId: string;
   recipientName: string;
 };
