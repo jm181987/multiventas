@@ -31,6 +31,7 @@ class ProductQueryDto {
   @IsOptional() @Type(() => Number) @IsNumber() maxPrice?: number;
   @IsOptional() @Type(() => Number) @IsInt() @Min(1) page = 1;
   @IsOptional() @Type(() => Number) @IsInt() @Min(1) @Max(50) limit = 24;
+  @IsOptional() @IsIn(['newest', 'price_asc', 'price_desc', 'name_asc']) sort: 'newest' | 'price_asc' | 'price_desc' | 'name_asc' = 'newest';
 }
 
 class DeliveryOptionDto {
@@ -119,6 +120,14 @@ class ProductsService {
       } : {}),
     };
 
+    const orderBy: Prisma.ProductOrderByWithRelationInput = query.sort === 'price_asc'
+      ? { price: 'asc' }
+      : query.sort === 'price_desc'
+        ? { price: 'desc' }
+        : query.sort === 'name_asc'
+          ? { title: 'asc' }
+          : { createdAt: 'desc' };
+
     const [items, total] = await Promise.all([
       this.db.client.product.findMany({
         where,
@@ -128,7 +137,7 @@ class ProductsService {
           category: true,
           deliveryOptions: { where: { isActive: true }, orderBy: { type: 'asc' } },
         },
-        orderBy: { createdAt: 'desc' },
+        orderBy,
         skip: (query.page - 1) * query.limit,
         take: query.limit,
       }),
