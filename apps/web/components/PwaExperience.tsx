@@ -36,8 +36,10 @@ export function PwaExperience() {
   if (!visible || !prompt) return null;
 
   async function install() {
-    await prompt.prompt();
-    const choice = await prompt.userChoice;
+    const currentPrompt = prompt;
+    if (!currentPrompt) return;
+    await currentPrompt.prompt();
+    const choice = await currentPrompt.userChoice;
     if (choice.outcome === 'accepted') {
       setVisible(false);
       setPrompt(null);
