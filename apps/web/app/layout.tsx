@@ -52,9 +52,31 @@ export const metadata: Metadata = {
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
+  const websiteSchema = {
+    '@context': 'https://schema.org',
+    '@type': 'WebSite',
+    name: 'SeVende',
+    url: siteUrl,
+    potentialAction: {
+      '@type': 'SearchAction',
+      target: siteUrl + '/productos?q={search_term_string}',
+      'query-input': 'required name=search_term_string',
+    },
+    publisher: {
+      '@type': 'Organization',
+      name: 'KNJ',
+      url: siteUrl,
+      logo: siteUrl + '/knj-logo.webp',
+    },
+  };
+
   return (
-    <html lang="es">
+    <html lang="es-UY">
       <body>
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(websiteSchema).replace(/</g, '\\u003c') }}
+        />
         <Providers>
           <div className="flex min-h-screen flex-col">
             <SiteHeader />
