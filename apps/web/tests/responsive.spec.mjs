@@ -132,3 +132,18 @@ test('admin support content fits 320px', async ({ browser }) => {
   await assertNoPageOverflow(page, 'admin support');
   await context.close();
 });
+
+
+test('advanced product search stays usable on mobile', async ({ browser }) => {
+  const context = await browser.newContext({ viewport: { width: 320, height: 740 } });
+  const page = await context.newPage();
+  await dismissInstall(page);
+  await page.goto(baseURL + '/productos', { waitUntil: 'domcontentloaded' });
+  await page.getByPlaceholder('Buscar productos, marcas o descripciones').fill('demo');
+  await page.getByRole('button', { name: 'Buscar', exact: true }).click();
+  await page.waitForURL(/q=demo/);
+  await expect(page.getByLabel('Categoría')).toBeVisible();
+  await expect(page.getByLabel('Ordenar productos')).toBeVisible();
+  await assertNoPageOverflow(page, 'advanced product search');
+  await context.close();
+});
