@@ -124,10 +124,33 @@ class ConversationsService {
     const unread = messages.filter((message) => message.senderUserId !== userId && !message.readAt).length;
 
     if (unread) {
-      await this.db.runSystem(() => this.db.client.orderMessage.updateMany({
-        where: { orderId, senderUserId: { not: userId }, readAt: null },
-        data: { readAt: new Date() },
-      }));
+      await this.db.runSystem(async () => {
+        await this.db.client.orderMessage.updateMany({
+          where: { orderId, senderUserId: { not: userId }, readAt: null },
+          data: { readAt: new Date() },
+        });
+
+        const pendingNotifications = await this.db.client.notification.findMany({
+          where: {
+            userId,
+            type: NotificationType.MESSAGE_RECEIVED,
+            readAt: null,
+          },
+          select: { id: true, metadata: true },
+        });
+        const notificationIds = pendingNotifications
+          .filter((notification) => {
+            const metadata = notification.metadata as Record<string, unknown> | null;
+            return metadata?.orderId === orderId;
+          })
+          .map((notification) => notification.id);
+        if (notificationIds.length) {
+          await this.db.client.notification.updateMany({
+            where: { id: { in: notificationIds } },
+            data: { readAt: new Date() },
+          });
+        }
+      });
     }
 
     const supportCases = await this.db.runSystem(() => this.db.client.supportCase.findMany({
@@ -313,9 +336,19 @@ class ConversationsService {
           : null,
       },
       include: {
-        order: { select: { id: true } },
+        order: {
+          select: {
+            id: true,
+            buyerId: true,
+            vendor: { select: { userId: true } },
+          },
+        },
       },
     }));
+
+    const creatorHref = updated.createdByUserId === updated.order.vendor.userId
+      ? '/vendor/pedidos'
+      : '/mis-pedidos';
 
     await this.notifications.create({
       userId: updated.createdByUserId,
@@ -327,7 +360,7 @@ class ConversationsService {
         : dto.status === SupportCaseStatus.CLOSED
           ? 'El equipo de SeVende cerró tu caso de soporte.'
           : 'El equipo de SeVende está revisando tu caso.',
-      href: updated.createdByUserId ? '/mis-pedidos' : null,
+      href: creatorHref,
       metadata: { supportCaseId: updated.id, orderId: updated.order.id, status: updated.status },
     });
 
