@@ -1,3 +1,4 @@
+import type { Metadata } from 'next';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { Search, ShieldCheck, Store } from 'lucide-react';
@@ -6,6 +7,7 @@ import { ProductGrid } from '@/components/ProductGrid';
 import { ProductSearch, Store as StoreType } from '@/lib/types';
 import { contrastText } from '@/lib/utils';
 import { ReviewStars } from '@/components/ReviewStars';
+import { ShareButton } from '@/components/ShareButton';
 
 export const dynamic = 'force-dynamic';
 
@@ -13,6 +15,50 @@ type PublicStore = StoreType & {
   productCount?: number;
   vendor?: { businessName?: string | null };
 };
+
+const siteUrl = 'https://www.sevende.knjpro.site';
+
+function storeDescription(store: PublicStore) {
+  const fallback = `Explorá los productos de ${store.name} en SeVende, el marketplace de KNJ.`;
+  return (store.description || fallback).replace(/\s+/g, ' ').trim().slice(0, 160);
+}
+
+function absoluteMedia(url?: string | null) {
+  if (!url) return undefined;
+  if (/^https?:\/\//i.test(url)) return url;
+  return siteUrl + (url.startsWith('/') ? url : '/' + url);
+}
+
+export async function generateMetadata({ params }: { params: { slug: string } }): Promise<Metadata> {
+  const store = await publicApi<PublicStore>(`/stores/${params.slug}`).catch(() => null);
+  if (!store) {
+    return {
+      title: 'Tienda no disponible',
+      robots: { index: false, follow: false },
+    };
+  }
+
+  const description = storeDescription(store);
+  const canonical = `/tienda/${store.slug}`;
+  return {
+    title: `${store.name} · Tienda online`,
+    description,
+    alternates: { canonical },
+    openGraph: {
+      type: 'website',
+      locale: 'es_UY',
+      siteName: 'SeVende',
+      url: canonical,
+      title: `${store.name} | SeVende`,
+      description,
+    },
+    twitter: {
+      card: 'summary_large_image',
+      title: `${store.name} | SeVende`,
+      description,
+    },
+  };
+}
 
 type ReviewSummary = {
   average: number;
@@ -57,9 +103,30 @@ export default async function StorePage({
   const accent = store.primaryColor || '#18181b';
   const accentText = contrastText(accent);
   const totalPages = Math.max(1, Math.ceil(products.total / products.limit));
+  const storeSchema = {
+    '@context': 'https://schema.org',
+    '@type': 'Organization',
+    name: store.name,
+    url: `${siteUrl}/tienda/${store.slug}`,
+    description: storeDescription(store),
+    ...(store.logoUrl ? { logo: absoluteMedia(store.logoUrl) } : {}),
+    ...(reputation.count > 0 ? {
+      aggregateRating: {
+        '@type': 'AggregateRating',
+        ratingValue: reputation.average,
+        reviewCount: reputation.count,
+        bestRating: 5,
+        worstRating: 1,
+      },
+    } : {}),
+  };
 
   return (
     <main>
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(storeSchema).replace(/</g, '\\u003c') }}
+      />
       <section className="relative overflow-hidden border-b text-white" style={{ backgroundColor: accent }}>
         {store.coverUrl && <img src={store.coverUrl} alt="" className="absolute inset-0 h-full w-full object-cover" />}
         <div className="absolute inset-0 bg-black/45" />
@@ -83,6 +150,13 @@ export default async function StorePage({
                   <span>· {reputation.count} opiniones verificadas</span>
                 </span>
               )}
+            </div>
+            <div className="mt-4">
+              <ShareButton
+                path={`/tienda/${store.slug}`}
+                title={store.name}
+                text={`Conocé ${store.name} en SeVende`}
+              />
             </div>
           </div>
         </div>
