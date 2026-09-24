@@ -16,8 +16,13 @@
     --radius: 0.85rem;
   }
 
-  * { @apply border-border; }
-  body { @apply bg-background text-foreground antialiased; }
+  * { @apply border-border; box-sizing: border-box; }
+  html, body { width: 100%; max-width: 100%; }
+  body { @apply bg-background text-foreground antialiased; overflow-wrap: anywhere; }
+  main, section, article, header, footer, nav { min-width: 0; }
+  img, video, canvas { max-width: 100%; height: auto; }
+  input, select, textarea, button { max-width: 100%; }
+  h1, h2, h3, p, a, span { overflow-wrap: anywhere; }
 }
 
 .hero-grid {
@@ -75,5 +80,13 @@
   .tech-float-delayed,
   .tech-pulse {
     animation: none;
+  }
+}
+
+
+@media (max-width: 420px) {
+  .mobile-safe-pad {
+    padding-left: 0.75rem !important;
+    padding-right: 0.75rem !important;
   }
 }
